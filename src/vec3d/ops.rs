@@ -1,60 +1,59 @@
 use std::ops;
+use super::Vec3D;
 
-#[derive(Debug, Copy, Clone)]
-pub struct Vec3D {
-    pub x: f64,
-    pub y: f64,
-    pub z: f64,
-}
+impl_op_ex!(+ |lhs: &Vec3D, rhs: &Vec3D| -> Vec3D {
+    Vec3D::new(
+        lhs.x + rhs.x, 
+        lhs.y + rhs.y, 
+        lhs.z + rhs.z
+    )
+});
 
-impl Vec3D {
-    pub fn new(x: f64, y: f64, z: f64) -> Self {
-        Self {x, y, z}
-    }
+impl_op_ex!(+= |lhs: &mut Vec3D, rhs: &Vec3D| {
+    lhs.x += rhs.x;
+    lhs.y += rhs.y;
+    lhs.z += rhs.z;
+});
 
-    #[inline]
-    pub fn norm(&self) -> f64 {
-        self.norm_squared().sqrt()
-    }
+impl_op_ex!(- |lhs: &Vec3D, rhs: &Vec3D| -> Vec3D {
+    Vec3D::new(
+        lhs.x - rhs.x, 
+        lhs.y - rhs.y, 
+        lhs.z - rhs.z
+    )
+});
 
-    #[inline]
-    pub fn norm_squared(&self) -> f64 {
-        self.x * self.x + self.y * self.y + self.z * self.z
-    }
+impl_op_ex!(-= |lhs: &mut Vec3D, rhs: &Vec3D| {
+    lhs.x -= rhs.x;
+    lhs.y -= rhs.y;
+    lhs.z -= rhs.z;
+});
 
-    pub fn normalise(&mut self) {
-        *self /= self.norm();
-    }
+impl_op_ex!(- |vec: &Vec3D| -> Vec3D {
+    Vec3D::new(-vec.x, -vec.y, -vec.z)
+});
 
-    #[inline]
-    pub fn dot(vec1: &Self, vec2: &Self) -> f64 {
-        vec1.x*vec2.x + vec1.y*vec2.y + vec1.z*vec2.z
-    }
+impl_op_ex_commutative!(* |vec: &Vec3D, scalar: f64| -> Vec3D {
+    Vec3D::new(vec.x * scalar, vec.y * scalar, vec.z * scalar)
+});
 
-    #[inline]
-    pub fn cross(vec1: &Self, vec2: &Self) -> Self {
-        Self::new(
-            vec1.y*vec2.z - vec1.z*vec2.y,
-            vec1.z*vec2.x - vec1.x*vec2.z,
-            vec1.x*vec2.y - vec1.y*vec2.x,
-        )
-    }
-}
+impl_op_ex!(*= |lhs: &mut Vec3D, scalar: f64| {
+    lhs.x *= scalar;
+    lhs.y *= scalar;
+    lhs.z *= scalar;
+});
 
-impl std::fmt::Display for Vec3D {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "[{:?}, {:?}, {:?}]", self.x, self.y, self.z)
-    }
-}
+impl_op_ex!(/ |vec: &Vec3D, scalar: f64| -> Vec3D {
+    Vec3D::new(vec.x / scalar, vec.y / scalar, vec.z / scalar)
+});
 
-impl std::cmp::PartialEq for Vec3D {
-    #[inline]
-    fn eq(&self, other: &Self) -> bool {
-        self.x == other.x && self.y == other.y && self.z == other.z
-    }
-}
-impl Eq for Vec3D {}
+impl_op_ex!(/= |lhs: &mut Vec3D, scalar: f64| {
+    lhs.x /= scalar;
+    lhs.y /= scalar;
+    lhs.z /= scalar;
+});
 
+/* POSSIBLY WRITE OWN THAT ARE OPTIMISED WRT. MEMORY ALLOCATION WHEN TAKING OWNERSHIP
 impl ops::Add<Vec3D> for Vec3D {
     type Output = Self;
 
@@ -108,6 +107,15 @@ impl ops::Neg for Vec3D {
     }
 }
 
+impl ops::Mul<Vec3D> for f64 {
+    type Output = Vec3D;
+
+    #[inline]
+    fn mul(self, vec: Vec3D) -> Vec3D {
+        vec * self
+    }
+}
+
 impl ops::Mul<f64> for Vec3D {
     type Output = Self;
 
@@ -142,45 +150,11 @@ impl ops::DivAssign<f64> for Vec3D {
         self.y /= scalar;
         self.z /= scalar;
     }
-}
-
-
+} */
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn construct_vector() {
-        let vec = Vec3D::new(1.0, 2.0, 3.0);
-        assert_eq!(vec.x, 1.0);
-        assert_eq!(vec.y, 2.0);
-        assert_eq!(vec.z, 3.0);
-    }
-
-    #[test]
-    fn normalise() {
-        let mut vec = Vec3D::new(1.0, 2.0, 3.0);
-        vec.normalise();
-        assert!((vec.x - 0.2672612419124243).abs() < 1e-15);
-        assert!((vec.y - 0.5345224838248487).abs() < 1e-15);
-        assert!((vec.z - 0.8017837257372731).abs() < 1e-15);
-    }
-
-    #[test]
-    fn dot() {
-        let vec1 = Vec3D::new(1.0, 2.0, 3.0);
-        let vec2 = Vec3D::new(1.0, -1.0, 1.0);
-        assert_eq!(Vec3D::dot(&vec1, &vec2), 2.0);
-    }
-
-    #[test]
-    fn cross() {
-        let vec1 = Vec3D::new(1.0, 2.0, 3.0);
-        let vec2 = Vec3D::new(1.0, -1.0, 1.0);
-        assert_eq!(Vec3D::cross(&vec1, &vec2), Vec3D::new(5.0, 2.0, -3.0));
-        assert_eq!(Vec3D::cross(&vec2, &vec1), Vec3D::new(-5.0, -2.0, 3.0));
-    }
 
     #[test]
     fn add() {
@@ -222,6 +196,12 @@ mod tests {
     fn mul() {
         let vec = Vec3D::new(1.0, 2.0, 3.0);
         assert_eq!(vec * 2.0, Vec3D::new(2.0, 4.0, 6.0));
+    }
+
+    #[test]
+    fn left_mul() {
+        let vec = Vec3D::new(1.0, 2.0, 3.0);
+        assert_eq!(2.0 * vec, Vec3D::new(2.0, 4.0, 6.0));
     }
 
     #[test]

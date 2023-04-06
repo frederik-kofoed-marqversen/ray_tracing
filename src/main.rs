@@ -1,36 +1,88 @@
+#[macro_use]
+extern crate impl_ops;
 mod vec3d;
 mod ray;
 
+use std::io;
 use std::io::Write;
 
 use ray::Ray;
 use vec3d::Vec3D;
 
-type Color = Vec3D;
+type Colour = Vec3D;
 type Point3D = Vec3D;
 
-fn main() -> std::io::Result<()> {
-    const HEIGHT: usize = 256;
-    const WIDTH: usize = 256;
+fn write_pixel(lock: &mut io::StdoutLock, pixel_colour: Colour) -> io::Result<()> {
+    writeln!(lock, "{} {} {}", 
+        (pixel_colour.x * 255.999) as u8,
+        (pixel_colour.y * 255.999) as u8,
+        (pixel_colour.z * 255.999) as u8,
+    )
+}
 
-    let stdout = std::io::stdout();
+fn ray_colour(ray: &Ray) -> Colour {
+    let center = Point3D::new(0.0, 1.0, 0.0);
+    match hit_sphere(&center, 0.5, ray) {
+        Some(t) => {
+            let normal = Vec3D::unit_vector(&(ray.at(t) - &center));
+            return 0.5 * Colour::new(normal.x+1.0, normal.z+1.0, -normal.y+1.0)
+        },
+        None => {
+            let t = 0.5 * (ray.direction.z / ray.direction.norm() + 1.0);
+            return (1.0 - t) * Colour::new(1.0, 1.0, 1.0) + t * Colour::new(0.5, 0.7, 1.0)
+        }
+    }
+}
+
+fn hit_sphere(center: &Point3D, radius: f64, ray: &Ray) -> Option<f64> {
+    let r_oc: Vec3D = ray.origin - center;
+    let a = ray.direction.norm_squared();
+    let half_b = Vec3D::dot(&ray.direction, &r_oc);
+    let c = r_oc.norm_squared() - radius * radius;
+
+    let d = half_b*half_b - a*c;
+
+    if d > 0.0 {
+        return Some(-(half_b + d.sqrt()) / a)
+    } else {
+        return None
+    }
+}
+
+fn main() -> io::Result<()> {
+    // Output image
+    const ASPECT_RATIO: f64 = 16.0 / 9.0;
+    const IMAGE_WIDTH: usize = 400;
+    const IMAGE_HEIGHT: usize = (IMAGE_WIDTH as f64 / ASPECT_RATIO) as usize;
+
+    // Camera
+    let window_height: f64 = 2.0;
+    let window_width: f64 = window_height * ASPECT_RATIO;
+    let focal_length: f64 = 1.0;
+
+    let origin = Point3D::zero();
+    let horizontal = Vec3D::e1() * window_width;
+    let vertical = Vec3D::e3() * window_height;
+    let forward = Vec3D::e2() * focal_length;
+    let lower_left_corner: Point3D = &origin + &forward - &horizontal / 2.0 - &vertical / 2.0;
+
+    // Render image
+    let stdout = io::stdout();
     let mut lock = stdout.lock();
-    let stderr = std::io::stderr();
+    let stderr = io::stderr();
     let mut err_lock = stderr.lock();
 
-    write!(lock, "P3\n{WIDTH} {HEIGHT}\n255\n")?;
-    for j in (0..HEIGHT).rev() {
+    write!(lock, "P3\n{IMAGE_WIDTH} {IMAGE_HEIGHT}\n255\n")?;
+    for j in (0..IMAGE_HEIGHT).rev() {
         writeln!(err_lock, "Scanlines remaining: {j}")?;
-        for i in 0..WIDTH {
-            let r = i as f64 / (WIDTH - 1) as f64;
-            let g = j as f64 / (HEIGHT - 1) as f64;
-            let b = 0.25;
-
-            let ir = (255.999 * r) as u32;
-            let ig = (255.999 * g) as u32;
-            let ib = (255.999 * b) as u32;
-
-            writeln!(lock, "{ir} {ig} {ib}")?;
+        
+        let v = j as f64 / (IMAGE_HEIGHT-1) as f64;
+        for i in 0..IMAGE_WIDTH {
+            let u = i as f64 / (IMAGE_WIDTH-1) as f64;
+            let direction: Vec3D = &lower_left_corner + u*&horizontal + v*&vertical - &origin;
+            let ray = Ray::new(origin.clone(), direction);
+            let colour = ray_colour(&ray);
+            write_pixel(&mut lock, colour)?;
         }
     }
     writeln!(err_lock, "Done.")?;
