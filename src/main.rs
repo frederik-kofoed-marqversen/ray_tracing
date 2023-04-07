@@ -2,12 +2,14 @@
 extern crate impl_ops;
 mod vec3d;
 mod ray;
+mod surfaces;
 
 use std::io;
 use std::io::Write;
 
-use ray::Ray;
 use vec3d::Vec3D;
+use ray::Ray;
+use surfaces::{Sphere, Environment};
 
 type Colour = Vec3D;
 type Point3D = Vec3D;
@@ -20,32 +22,16 @@ fn write_pixel(lock: &mut io::StdoutLock, pixel_colour: Colour) -> io::Result<()
     )
 }
 
-fn ray_colour(ray: &Ray) -> Colour {
-    let center = Point3D::new(0.0, 1.0, 0.0);
-    match hit_sphere(&center, 0.5, ray) {
-        Some(t) => {
-            let normal = Vec3D::unit_vector(&(ray.at(t) - &center));
+fn ray_colour(ray: &Ray, world: &Environment) -> Colour {
+    match world.hit(ray, 0.0, f64::INFINITY) {
+        Some((t, surface)) => {
+            let normal = surface.normal(ray.at(t));
             return 0.5 * Colour::new(normal.x+1.0, normal.z+1.0, -normal.y+1.0)
         },
         None => {
             let t = 0.5 * (ray.direction.z / ray.direction.norm() + 1.0);
             return (1.0 - t) * Colour::new(1.0, 1.0, 1.0) + t * Colour::new(0.5, 0.7, 1.0)
         }
-    }
-}
-
-fn hit_sphere(center: &Point3D, radius: f64, ray: &Ray) -> Option<f64> {
-    let r_oc: Vec3D = ray.origin - center;
-    let a = ray.direction.norm_squared();
-    let half_b = Vec3D::dot(&ray.direction, &r_oc);
-    let c = r_oc.norm_squared() - radius * radius;
-
-    let d = half_b*half_b - a*c;
-
-    if d > 0.0 {
-        return Some(-(half_b + d.sqrt()) / a)
-    } else {
-        return None
     }
 }
 
@@ -73,6 +59,11 @@ fn main() -> io::Result<()> {
     let mut err_lock = stderr.lock();
 
     write!(lock, "P3\n{IMAGE_WIDTH} {IMAGE_HEIGHT}\n255\n")?;
+    
+    let mut world = Environment::new();
+    world.add(Box::new(Sphere::new(Point3D::new(0.0, 1.0, 0.0), 0.5)));
+    world.add(Box::new(Sphere::new(Point3D::new(0.0, 1.0, -100.5), 100.0)));
+
     for j in (0..IMAGE_HEIGHT).rev() {
         writeln!(err_lock, "Scanlines remaining: {j}")?;
         
@@ -81,7 +72,7 @@ fn main() -> io::Result<()> {
             let u = i as f64 / (IMAGE_WIDTH-1) as f64;
             let direction: Vec3D = &lower_left_corner + u*&horizontal + v*&vertical - &origin;
             let ray = Ray::new(origin.clone(), direction);
-            let colour = ray_colour(&ray);
+            let colour = ray_colour(&ray, &world);
             write_pixel(&mut lock, colour)?;
         }
     }
