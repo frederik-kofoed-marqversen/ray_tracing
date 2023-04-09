@@ -1,3 +1,4 @@
+use super::{Rng, StandardNormal};
 mod ops;
 
 #[derive(Debug, Copy, Clone)]
@@ -29,8 +30,38 @@ impl Vec3D {
     }
 
     #[inline]
+    pub fn almost_zero(&self, abs: f64) -> bool {
+        return self.norm_squared() < abs;
+    }
+
+    #[inline]
+    pub fn dot(vec1: &Self, vec2: &Self) -> f64 {
+        vec1.x*vec2.x + vec1.y*vec2.y + vec1.z*vec2.z
+    }
+
+    #[inline]
+    pub fn cross(vec1: &Self, vec2: &Self) -> Self {
+        Self::new(
+            vec1.y*vec2.z - vec1.z*vec2.y,
+            vec1.z*vec2.x - vec1.x*vec2.z,
+            vec1.x*vec2.y - vec1.y*vec2.x,
+        )
+    }
+
+    #[inline]
+    pub fn interpolate(vec1: &Self, vec2: &Self, t: f64) -> Self {
+        (1.0 - t) * vec1 + t * vec2
+    }
+}
+
+impl Vec3D {
+    #[inline]
     pub fn zero() -> Self {
         Self::new(0.0, 0.0, 0.0)
+    }
+
+    pub fn ones() -> Self {
+        Self::new(1.0, 1.0, 1.0)
     }
 
     #[inline]
@@ -54,23 +85,25 @@ impl Vec3D {
     }
 
     #[inline]
-    pub fn dot(vec1: &Self, vec2: &Self) -> f64 {
-        vec1.x*vec2.x + vec1.y*vec2.y + vec1.z*vec2.z
-    }
-
-    #[inline]
-    pub fn cross(vec1: &Self, vec2: &Self) -> Self {
-        Self::new(
-            vec1.y*vec2.z - vec1.z*vec2.y,
-            vec1.z*vec2.x - vec1.x*vec2.z,
-            vec1.x*vec2.y - vec1.y*vec2.x,
-        )
+    pub fn random(length: f64, rng: &mut impl Rng) -> Self {
+        let v = Self::new(
+            rng.sample(StandardNormal), 
+            rng.sample(StandardNormal), 
+            rng.sample(StandardNormal)
+        );
+        v * (length / v.norm())
     }
 }
 
 impl std::fmt::Display for Vec3D {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "[{:?}, {:?}, {:?}]", self.x, self.y, self.z)
+    }
+}
+
+impl Default for Vec3D {
+    fn default() -> Self {
+        Self::zero()
     }
 }
 
@@ -84,6 +117,7 @@ impl Eq for Vec3D {}
 
 #[cfg(test)]
 mod tests {
+    extern crate rand;
     use super::*;
 
     #[test]
@@ -111,6 +145,13 @@ mod tests {
         assert!((u.x - 0.2672612419124243).abs() < 1e-15);
         assert!((u.y - 0.5345224838248487).abs() < 1e-15);
         assert!((u.z - 0.8017837257372731).abs() < 1e-15);
+    }
+
+    #[test]
+    fn random_unit_vector() {
+        let mut rng = rand::thread_rng();
+        let vec = Vec3D::random(2.0, &mut rng);
+        assert!((vec.norm() - 2.0).abs() < 1e-15);
     }
 
     #[test]

@@ -33,6 +33,20 @@ impl_op_ex!(- |vec: &Vec3D| -> Vec3D {
     Vec3D::new(-vec.x, -vec.y, -vec.z)
 });
 
+impl_op_ex!(* |lhs: &Vec3D, rhs: &Vec3D| -> Vec3D {
+    Vec3D::new(
+        lhs.x * rhs.x, 
+        lhs.y * rhs.y, 
+        lhs.z * rhs.z
+    )
+});
+
+impl_op_ex!(*= |lhs: &mut Vec3D, rhs: &Vec3D| {
+    lhs.x *= rhs.x;
+    lhs.y *= rhs.y;
+    lhs.z *= rhs.z;
+});
+
 impl_op_ex_commutative!(* |vec: &Vec3D, scalar: f64| -> Vec3D {
     Vec3D::new(vec.x * scalar, vec.y * scalar, vec.z * scalar)
 });
@@ -191,15 +205,30 @@ mod tests {
         let vec = Vec3D::new(1.0, 2.0, 3.0);
         assert_eq!(-vec, Vec3D::new(-1.0, -2.0, -3.0));
     }
+    
+    #[test]
+    fn elementwise_mul() {
+        let vec1 = Vec3D::new(0.0, 1.0, 2.0);
+        let vec2 = Vec3D::new(1.0, -1.0, 1.0);
+        assert_eq!(vec1 * vec2, Vec3D::new(0.0, -1.0, 2.0));
+    }
 
     #[test]
-    fn mul() {
+    fn elementwise_mul_assign() {
+        let mut vec1 = Vec3D::new(0.0, 1.0, 2.0);
+        let vec2 = Vec3D::new(1.0, -1.0, 1.0);
+        vec1 *= vec2;
+        assert_eq!(vec1, Vec3D::new(0.0, -1.0, 2.0));
+    }
+
+    #[test]
+    fn scalar_mul() {
         let vec = Vec3D::new(1.0, 2.0, 3.0);
         assert_eq!(vec * 2.0, Vec3D::new(2.0, 4.0, 6.0));
     }
 
     #[test]
-    fn left_mul() {
+    fn scalar_left_mul() {
         let vec = Vec3D::new(1.0, 2.0, 3.0);
         assert_eq!(2.0 * vec, Vec3D::new(2.0, 4.0, 6.0));
     }
