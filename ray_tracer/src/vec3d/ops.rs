@@ -47,21 +47,21 @@ impl_op_ex!(*= |lhs: &mut Vec3D, rhs: &Vec3D| {
     lhs.z *= rhs.z;
 });
 
-impl_op_ex_commutative!(* |vec: &Vec3D, scalar: f64| -> Vec3D {
+impl_op_ex_commutative!(* |vec: &Vec3D, scalar: f32| -> Vec3D {
     Vec3D::new(vec.x * scalar, vec.y * scalar, vec.z * scalar)
 });
 
-impl_op_ex!(*= |lhs: &mut Vec3D, scalar: f64| {
+impl_op_ex!(*= |lhs: &mut Vec3D, scalar: f32| {
     lhs.x *= scalar;
     lhs.y *= scalar;
     lhs.z *= scalar;
 });
 
-impl_op_ex!(/ |vec: &Vec3D, scalar: f64| -> Vec3D {
+impl_op_ex!(/ |vec: &Vec3D, scalar: f32| -> Vec3D {
     Vec3D::new(vec.x / scalar, vec.y / scalar, vec.z / scalar)
 });
 
-impl_op_ex!(/= |lhs: &mut Vec3D, scalar: f64| {
+impl_op_ex!(/= |lhs: &mut Vec3D, scalar: f32| {
     lhs.x /= scalar;
     lhs.y /= scalar;
     lhs.z /= scalar;
@@ -121,7 +121,7 @@ impl ops::Neg for Vec3D {
     }
 }
 
-impl ops::Mul<Vec3D> for f64 {
+impl ops::Mul<Vec3D> for f32 {
     type Output = Vec3D;
 
     #[inline]
@@ -130,36 +130,36 @@ impl ops::Mul<Vec3D> for f64 {
     }
 }
 
-impl ops::Mul<f64> for Vec3D {
+impl ops::Mul<f32> for Vec3D {
     type Output = Self;
 
     #[inline]
-    fn mul(self, scalar: f64) -> Self {
+    fn mul(self, scalar: f32) -> Self {
         Self::new(self.x * scalar, self.y * scalar, self.z * scalar)
     }
 }
 
-impl ops::MulAssign<f64> for Vec3D {
+impl ops::MulAssign<f32> for Vec3D {
     #[inline]
-    fn mul_assign(&mut self, scalar: f64) {
+    fn mul_assign(&mut self, scalar: f32) {
         self.x *= scalar;
         self.y *= scalar;
         self.z *= scalar;
     }
 }
 
-impl ops::Div<f64> for Vec3D {
+impl ops::Div<f32> for Vec3D {
     type Output = Self;
 
     #[inline]
-    fn div(self, scalar: f64) -> Self {
+    fn div(self, scalar: f32) -> Self {
         Self::new(self.x / scalar, self.y / scalar, self.z / scalar)
     }
 }
 
-impl ops::DivAssign<f64> for Vec3D {
+impl ops::DivAssign<f32> for Vec3D {
     #[inline]
-    fn div_assign(&mut self, scalar: f64) {
+    fn div_assign(&mut self, scalar: f32) {
         self.x /= scalar;
         self.y /= scalar;
         self.z /= scalar;
