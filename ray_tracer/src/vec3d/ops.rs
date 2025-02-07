@@ -1,10 +1,10 @@
-use std::ops;
 use super::Vec3D;
+use std::ops;
 
 impl_op_ex!(+ |lhs: &Vec3D, rhs: &Vec3D| -> Vec3D {
     Vec3D::new(
-        lhs.x + rhs.x, 
-        lhs.y + rhs.y, 
+        lhs.x + rhs.x,
+        lhs.y + rhs.y,
         lhs.z + rhs.z
     )
 });
@@ -15,12 +15,8 @@ impl_op_ex!(+= |lhs: &mut Vec3D, rhs: &Vec3D| {
     lhs.z += rhs.z;
 });
 
-impl_op_ex!(- |lhs: &Vec3D, rhs: &Vec3D| -> Vec3D {
-    Vec3D::new(
-        lhs.x - rhs.x, 
-        lhs.y - rhs.y, 
-        lhs.z - rhs.z
-    )
+impl_op_ex!(-|lhs: &Vec3D, rhs: &Vec3D| -> Vec3D {
+    Vec3D::new(lhs.x - rhs.x, lhs.y - rhs.y, lhs.z - rhs.z)
 });
 
 impl_op_ex!(-= |lhs: &mut Vec3D, rhs: &Vec3D| {
@@ -29,16 +25,10 @@ impl_op_ex!(-= |lhs: &mut Vec3D, rhs: &Vec3D| {
     lhs.z -= rhs.z;
 });
 
-impl_op_ex!(- |vec: &Vec3D| -> Vec3D {
-    Vec3D::new(-vec.x, -vec.y, -vec.z)
-});
+impl_op_ex!(-|vec: &Vec3D| -> Vec3D { Vec3D::new(-vec.x, -vec.y, -vec.z) });
 
-impl_op_ex!(* |lhs: &Vec3D, rhs: &Vec3D| -> Vec3D {
-    Vec3D::new(
-        lhs.x * rhs.x, 
-        lhs.y * rhs.y, 
-        lhs.z * rhs.z
-    )
+impl_op_ex!(*|lhs: &Vec3D, rhs: &Vec3D| -> Vec3D {
+    Vec3D::new(lhs.x * rhs.x, lhs.y * rhs.y, lhs.z * rhs.z)
 });
 
 impl_op_ex!(*= |lhs: &mut Vec3D, rhs: &Vec3D| {
@@ -47,7 +37,7 @@ impl_op_ex!(*= |lhs: &mut Vec3D, rhs: &Vec3D| {
     lhs.z *= rhs.z;
 });
 
-impl_op_ex_commutative!(* |vec: &Vec3D, scalar: f32| -> Vec3D {
+impl_op_ex_commutative!(*|vec: &Vec3D, scalar: f32| -> Vec3D {
     Vec3D::new(vec.x * scalar, vec.y * scalar, vec.z * scalar)
 });
 
@@ -74,8 +64,8 @@ impl ops::Add<Vec3D> for Vec3D {
     #[inline]
     fn add(self, other: Self) -> Self {
         Self::new(
-            self.x + other.x, 
-            self.y + other.y, 
+            self.x + other.x,
+            self.y + other.y,
             self.z + other.z
         )
     }
@@ -96,8 +86,8 @@ impl ops::Sub<Vec3D> for Vec3D {
     #[inline]
     fn sub(self, other: Self) -> Self {
         Self::new(
-            self.x - other.x, 
-            self.y - other.y, 
+            self.x - other.x,
+            self.y - other.y,
             self.z - other.z
         )
     }
@@ -205,7 +195,7 @@ mod tests {
         let vec = Vec3D::new(1.0, 2.0, 3.0);
         assert_eq!(-vec, Vec3D::new(-1.0, -2.0, -3.0));
     }
-    
+
     #[test]
     fn elementwise_mul() {
         let vec1 = Vec3D::new(0.0, 1.0, 2.0);

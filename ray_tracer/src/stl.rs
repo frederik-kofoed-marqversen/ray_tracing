@@ -1,8 +1,8 @@
-use std::io::Read;
 use byteorder::{LittleEndian, ReadBytesExt};
+use std::io::Read;
 
-use super::Vec3D;
 use super::primitives::Triangle;
+use super::Vec3D;
 
 fn read_vector(reader: &mut impl std::io::Read) -> std::io::Result<Vec3D> {
     Ok(Vec3D::new(
@@ -15,7 +15,7 @@ fn read_vector(reader: &mut impl std::io::Read) -> std::io::Result<Vec3D> {
 pub fn read_stl(file_name: &str) -> std::io::Result<Vec<Triangle>> {
     let file = std::fs::File::open(file_name)?;
     let mut reader = std::io::BufReader::new(file);
-    
+
     // HEADER
     let mut header = [0; 80];
     reader.read_exact(&mut header)?;
@@ -44,9 +44,8 @@ pub fn read_stl(file_name: &str) -> std::io::Result<Vec<Triangle>> {
         panic!("File length does not match declared number of triangles");
     }
 
-    return Ok(result)
+    return Ok(result);
 }
-
 
 #[cfg(test)]
 mod tests {

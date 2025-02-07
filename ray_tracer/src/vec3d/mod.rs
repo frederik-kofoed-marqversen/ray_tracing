@@ -12,7 +12,15 @@ pub struct Vec3D {
 
 impl Vec3D {
     pub fn new(x: f32, y: f32, z: f32) -> Self {
-        Self {x, y, z}
+        Self { x, y, z }
+    }
+
+    pub fn new_polar(r: f32, theta: f32, phi: f32) -> Self {
+        Self {
+            x: r * f32::sin(theta) * f32::cos(phi),
+            y: r * f32::sin(theta) * f32::sin(phi),
+            z: r * f32::cos(theta),
+        }
     }
 
     #[inline]
@@ -43,15 +51,15 @@ impl Vec3D {
 
     #[inline]
     pub fn dot(vec1: &Self, vec2: &Self) -> f32 {
-        vec1.x*vec2.x + vec1.y*vec2.y + vec1.z*vec2.z
+        vec1.x * vec2.x + vec1.y * vec2.y + vec1.z * vec2.z
     }
 
     #[inline]
     pub fn cross(vec1: &Self, vec2: &Self) -> Self {
         Self::new(
-            vec1.y*vec2.z - vec1.z*vec2.y,
-            vec1.z*vec2.x - vec1.x*vec2.z,
-            vec1.x*vec2.y - vec1.y*vec2.x,
+            vec1.y * vec2.z - vec1.z * vec2.y,
+            vec1.z * vec2.x - vec1.x * vec2.z,
+            vec1.x * vec2.y - vec1.y * vec2.x,
         )
     }
 
@@ -94,11 +102,11 @@ impl Vec3D {
     #[inline]
     pub fn random_rejection(rng: &mut Rng) -> Self {
         loop {
-            let (x, y, z) = (rng.f32()-0.5, rng.f32()-0.5, rng.f32()-0.5);
-            let norm_sq = x*x + y*y + z*z;
+            let (x, y, z) = (rng.f32() - 0.5, rng.f32() - 0.5, rng.f32() - 0.5);
+            let norm_sq = x * x + y * y + z * z;
             if norm_sq < 0.25 {
                 let norm = norm_sq.sqrt();
-                return Self::new(x / norm, y / norm, z / norm)
+                return Self::new(x / norm, y / norm, z / norm);
             }
         }
     }
@@ -107,9 +115,9 @@ impl Vec3D {
     pub fn random_direct(rng: &mut Rng) -> Self {
         let phi = 2.0 * std::f32::consts::PI * rng.f32();
         let cos = 1.0 - 2.0 * rng.f32();
-        let sin = f32::sqrt(1.0 - cos*cos);
+        let sin = f32::sqrt(1.0 - cos * cos);
         let result = Self::new(phi.cos() * sin, phi.sin() * sin, cos);
-        return result
+        return result;
     }
 }
 

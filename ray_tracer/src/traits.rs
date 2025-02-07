@@ -1,5 +1,5 @@
-use super::{Ray, Vec3D};
 use super::primitives::AxisAlignedBoundingBox;
+use super::{Ray, Vec3D};
 
 pub trait Surface {
     fn hit(&self, ray: &Ray, t_min: f32, t_max: f32) -> Option<(f32, Vec3D)>;
@@ -10,3 +10,4 @@ pub trait Bounded {
 }
 
 pub trait BoundedSurface: Bounded + Surface {}
+impl<T: Bounded + Surface> BoundedSurface for T {}

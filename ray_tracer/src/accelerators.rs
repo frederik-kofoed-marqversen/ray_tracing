@@ -16,25 +16,35 @@ impl BoundingVolumeHierarchy {
             panic!("zero objects given!");
         }
         if n == 1 {
-            return objects.pop().unwrap()
+            return objects.pop().unwrap();
         }
         if n == 2 {
-            let bounding_box = AxisAlignedBoundingBox::combine(&objects[0].bounding_box(), &objects[1].bounding_box());
-            let result: Box<dyn BoundedSurface> = Box::new(Self {node1:objects.pop().unwrap(), node2:objects.pop().unwrap(), bounding_box});
-            return result
+            let bounding_box = AxisAlignedBoundingBox::combine(
+                &objects[0].bounding_box(),
+                &objects[1].bounding_box(),
+            );
+            let result: Box<dyn BoundedSurface> = Box::new(Self {
+                node1: objects.pop().unwrap(),
+                node2: objects.pop().unwrap(),
+                bounding_box,
+            });
+            return result;
         }
 
         let (left, right) = center_partition(objects);
 
         let node1 = Self::build(left);
         let node2 = Self::build(right);
-        let bounding_box = AxisAlignedBoundingBox::combine(&node1.bounding_box(), &node2.bounding_box());
-        let result: Box<dyn BoundedSurface> = Box::new(Self {node1, node2, bounding_box});
-        return result
+        let bounding_box =
+            AxisAlignedBoundingBox::combine(&node1.bounding_box(), &node2.bounding_box());
+        let result: Box<dyn BoundedSurface> = Box::new(Self {
+            node1,
+            node2,
+            bounding_box,
+        });
+        return result;
     }
 }
-
-impl BoundedSurface for BoundingVolumeHierarchy {}
 
 impl Bounded for BoundingVolumeHierarchy {
     fn bounding_box(&self) -> AxisAlignedBoundingBox {
@@ -43,26 +53,36 @@ impl Bounded for BoundingVolumeHierarchy {
 }
 
 impl Surface for BoundingVolumeHierarchy {
-    fn hit(&self, ray: &Ray, t_min: f32, mut t_max: f32) -> Option<(f32, Vec3D)> {
-        if self.bounding_box.hit(ray, t_min, t_max).is_none() {
-            // ray will miss both left and right => no hit
-            return None
-        }
+    fn hit(&self, ray: &Ray, t_min: f32, t_max: f32) -> Option<(f32, Vec3D)> {
+        let mut node1 = &self.node1;
+        let mut node2 = &self.node2;
 
-        let hit1 = self.node1.hit(ray, t_min, t_max);        
-        if hit1.is_some() {
-            // only hit right if closer than hit left
-            t_max = hit1.unwrap().0;
+        // First check if bounding box of either node is hit.
+        let hit1 = node1.bounding_box().hit(ray, t_min, t_max).map(|(t, _)| t);
+        let hit2 = node2.bounding_box().hit(ray, t_min, t_max).map(|(t, _)| t);
+        let (t1, t2) = match (hit1, hit2) {
+            (None, None) => return None,
+            (Some(_), None) => return node1.hit(ray, t_min, t_max),
+            (None, Some(_)) => return node2.hit(ray, t_min, t_max),
+            (Some(t1), Some(t2)) => (t1, t2),
+        };
+
+        // Both bounding boxes were hit.
+        // Now check for hits inside each node, starting with the closer of the two.
+        if t1 > t2 {
+            std::mem::swap(&mut node1, &mut node2);
         }
-        match self.node2.hit(ray, t_min, t_max) {
-            None => return hit1,
-            hit2 => return hit2
+        if let Some(hit) = node1.hit(ray, t_min, t_max) {
+            return Some(hit);
+        } else {
+            return node2.hit(ray, t_min, t_max);
         }
     }
 }
 
-
-fn center_partition(objects: Vec<Box<dyn BoundedSurface>>) -> (Vec<Box<dyn BoundedSurface>>, Vec<Box<dyn BoundedSurface>>) {
+fn center_partition(
+    objects: Vec<Box<dyn BoundedSurface>>,
+) -> (Vec<Box<dyn BoundedSurface>>, Vec<Box<dyn BoundedSurface>>) {
     let mut upper = objects[0].bounding_box().centroid();
     let mut lower = upper.clone();
     for obj in objects[1..].iter() {
@@ -73,7 +93,7 @@ fn center_partition(objects: Vec<Box<dyn BoundedSurface>>) -> (Vec<Box<dyn Bound
         }
     }
     let widths = &upper - &lower;
-    
+
     let mut max_width = 0.0;
     let mut axis = 0;
     for i in 0..3 {
@@ -82,9 +102,11 @@ fn center_partition(objects: Vec<Box<dyn BoundedSurface>>) -> (Vec<Box<dyn Bound
             axis = i;
         }
     }
-    
+
     let center = (upper + lower)[axis] / 2.0;
-    return objects.into_iter().partition(|obj| obj.bounding_box().centroid()[axis] < center)
+    return objects
+        .into_iter()
+        .partition(|obj| obj.bounding_box().centroid()[axis] < center);
 }
 
 #[cfg(test)]

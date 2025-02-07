@@ -4,8 +4,8 @@ pub type Colour = super::Vec3D;
 pub struct Material {
     pub albedo: Colour,
     pub roughness: f32,
-    pub emission: Colour,
-    pub intensity: f32,
+    pub emission: Option<(Colour, f32)>,
+    pub refractive_index: Option<f32>,
 }
 
 impl Material {
@@ -14,8 +14,8 @@ impl Material {
         Self {
             albedo,
             roughness: 1.0,
-            emission: Colour::zero(),
-            intensity: 0.0,
+            emission: None,
+            refractive_index: None,
         }
     }
 
@@ -24,8 +24,8 @@ impl Material {
         Self {
             albedo: Colour::zero(),
             roughness: 1.0,
-            emission,
-            intensity,
+            emission: Some((emission, intensity)),
+            refractive_index: None,
         }
     }
 
@@ -34,8 +34,8 @@ impl Material {
         Self {
             albedo: Colour::ones(),
             roughness: 0.0,
-            emission: Colour::zero(),
-            intensity: 0.0,
+            emission: None,
+            refractive_index: None,
         }
     }
 
@@ -44,8 +44,18 @@ impl Material {
         Self {
             albedo,
             roughness,
-            emission: Colour::zero(),
-            intensity: 0.0,
+            emission: None,
+            refractive_index: None,
+        }
+    }
+
+    #[inline]
+    pub fn dielectric(albedo: Colour, refractive_index: f32) -> Self {
+        Self {
+            albedo,
+            roughness: 0.0,
+            emission: None,
+            refractive_index: Some(refractive_index),
         }
     }
 }
