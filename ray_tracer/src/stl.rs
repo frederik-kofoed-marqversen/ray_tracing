@@ -35,7 +35,8 @@ pub fn read_stl(file_name: &str) -> std::io::Result<Vec<Triangle>> {
         );
         let _attribute = reader.read_u16::<LittleEndian>()?;
 
-        // maybe include check that calculated normal match declared normal?
+        // maybe include check that calculated normal match declared normal
+        // to check for consistency of the mesh.
 
         result.push(triangle);
     }

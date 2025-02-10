@@ -1,4 +1,5 @@
 use super::Vec3D;
+use std::iter::Sum;
 use std::ops;
 
 impl_op_ex!(+ |lhs: &Vec3D, rhs: &Vec3D| -> Vec3D {
@@ -56,6 +57,24 @@ impl_op_ex!(/= |lhs: &mut Vec3D, scalar: f32| {
     lhs.y /= scalar;
     lhs.z /= scalar;
 });
+
+impl Sum<Self> for Vec3D {
+    fn sum<I>(iter: I) -> Self
+    where
+        I: Iterator<Item = Self>,
+    {
+        iter.fold(Self::zero(), |a, b| a + b)
+    }
+}
+
+impl<'a> Sum<&'a Self> for Vec3D {
+    fn sum<I>(iter: I) -> Self
+    where
+        I: Iterator<Item = &'a Self>,
+    {
+        iter.fold(Self::zero(), |a, b| a + b)
+    }
+}
 
 /* POSSIBLY WRITE OWN THAT ARE OPTIMISED WRT. MEMORY ALLOCATION WHEN TAKING OWNERSHIP
 impl ops::Add<Vec3D> for Vec3D {

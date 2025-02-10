@@ -11,6 +11,7 @@ pub mod materials;
 pub mod primitives;
 pub mod stl;
 pub mod traits;
+pub mod subdivision_surface;
 
 #[derive(Debug, Copy, Clone)]
 pub struct Ray {

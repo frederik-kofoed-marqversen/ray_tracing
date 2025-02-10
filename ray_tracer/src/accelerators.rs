@@ -11,38 +11,36 @@ pub struct BoundingVolumeHierarchy {
 
 impl BoundingVolumeHierarchy {
     pub fn build(mut objects: Vec<Box<dyn BoundedSurface>>) -> Box<dyn BoundedSurface> {
-        let n = objects.len();
-        if n == 0 {
-            panic!("zero objects given!");
-        }
-        if n == 1 {
-            return objects.pop().unwrap();
-        }
-        if n == 2 {
-            let bounding_box = AxisAlignedBoundingBox::combine(
-                &objects[0].bounding_box(),
-                &objects[1].bounding_box(),
-            );
-            let result: Box<dyn BoundedSurface> = Box::new(Self {
-                node1: objects.pop().unwrap(),
-                node2: objects.pop().unwrap(),
-                bounding_box,
-            });
-            return result;
-        }
+        match objects.len() {
+            0 => panic!("zero objects given!"),
+            1 => return objects.pop().unwrap(),
+            2 => {
+                let bounding_box = AxisAlignedBoundingBox::combine(
+                    &objects[0].bounding_box(),
+                    &objects[1].bounding_box(),
+                );
+                let result: Box<dyn BoundedSurface> = Box::new(Self {
+                    node1: objects.pop().unwrap(),
+                    node2: objects.pop().unwrap(),
+                    bounding_box,
+                });
+                return result;
+            },
+            _ => {
+                let (left, right) = center_partition(objects);
 
-        let (left, right) = center_partition(objects);
-
-        let node1 = Self::build(left);
-        let node2 = Self::build(right);
-        let bounding_box =
-            AxisAlignedBoundingBox::combine(&node1.bounding_box(), &node2.bounding_box());
-        let result: Box<dyn BoundedSurface> = Box::new(Self {
-            node1,
-            node2,
-            bounding_box,
-        });
-        return result;
+                let node1 = Self::build(left);
+                let node2 = Self::build(right);
+                let bounding_box =
+                    AxisAlignedBoundingBox::combine(&node1.bounding_box(), &node2.bounding_box());
+                let result: Box<dyn BoundedSurface> = Box::new(Self {
+                    node1,
+                    node2,
+                    bounding_box,
+                });
+                return result;
+            }
+        }
     }
 }
 
