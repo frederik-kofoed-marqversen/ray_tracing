@@ -22,7 +22,7 @@ impl Material {
     #[inline]
     pub fn light_source(emission: Colour, intensity: f32) -> Self {
         Self {
-            albedo: Colour::zero(),
+            albedo: Colour::ZERO,
             roughness: 1.0,
             emission: Some((emission, intensity)),
             refractive_index: None,
@@ -32,7 +32,7 @@ impl Material {
     #[inline]
     pub fn mirror() -> Self {
         Self {
-            albedo: Colour::ones(),
+            albedo: Colour::ONES,
             roughness: 0.0,
             emission: None,
             refractive_index: None,

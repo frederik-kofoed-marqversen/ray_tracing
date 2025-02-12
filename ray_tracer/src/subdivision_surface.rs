@@ -1,25 +1,25 @@
 use std::collections::HashMap;
 
+use super::triangle_mesh::TriangleMesh;
 use super::{Point3D, Vec3D};
-
-#[derive(Clone)]
-pub struct TriangleMesh {
-    vertices: Vec<Point3D>,
-    triangles: Vec<[usize; 3]>,
-}
 
 /// This is an implementation of Loop Subdivision Surface. The basic ideas are from
 /// https://pbr-book.org/3ed-2018/Shapes/Subdivision_Surfaces#LoopSubdiv::beta
-/// However, major restructuring and optimisations have been done. They also describe 
-/// how to compute vertex normals. This has not been implemented here as of yet.
+/// However, major restructuring and optimisations have been done. They also describe
+/// how to compute vertex normals, and tangent vectors as to make a UV mesh. This
+/// has not been implemented here as of yet.
 pub fn loop_subdivide(mesh: &TriangleMesh, divisions: usize) -> TriangleMesh {
+    dbg!("1");
     let mut sd_surface = SDSurface::from_triangle_mesh(mesh);
-
+    dbg!("2");
+    dbg!(&sd_surface);
     for _ in 0..divisions {
         sd_surface.subdivide();
     }
-
-    sd_surface.push_to_limit_surface();
+    dbg!("3");
+    dbg!(&sd_surface);
+    // sd_surface.push_to_limit_surface();
+    dbg!("4");
     return sd_surface.to_triangle_mesh();
 }
 
@@ -35,18 +35,37 @@ fn prev(i: usize) -> usize {
     (i + 2) % 3
 }
 
+#[derive(Debug)]
 struct SDVertex {
     point: Vec3D,
     reference_face: usize, // index of any incident face
 }
 
+#[derive(Hash, PartialEq, Eq, Clone)]
+struct SDEdge {
+    v1: usize,
+    v2: usize,
+}
+
+impl SDEdge {
+    fn new(v1: usize, v2: usize) -> Self {
+        let mut vertices = [v1, v2];
+        vertices.sort();
+        return Self {
+            v1: vertices[0],
+            v2: vertices[1],
+        };
+    }
+}
+
 /// Represents a triangular face
 ///
 /// # Ordering of Neighbours
-/// - The `neighbours` are ordered according to the cyclic ordering of vertices:
+/// - The `neighbours` are ordered according to the positive cyclic ordering of vertices:
 ///   - If `neighbours[i]` is `Some(j)`, then the `j`th face shares the edge given by
 ///     (`vertices[i]`, `vertices[next(i)]`).
 ///   - If `neighbours[i]` is `None`, that edge is a **boundary edge**.
+#[derive(Debug)]
 struct SDFace {
     vertices: [usize; 3],           // index of vertices in positive order
     neighbours: [Option<usize>; 3], // indices of neighbouring faces.
@@ -64,6 +83,7 @@ impl SDFace {
     }
 }
 
+#[derive(Debug)]
 struct SDSurface {
     vertices: Vec<SDVertex>,
     faces: Vec<SDFace>,
@@ -107,17 +127,17 @@ impl SDSurface {
         // When encountering an edge, it is stored together with its corresponding face, and
         // the index of that edge into the neighbours field of that face.
         // When we are done, `edges` contains all edges that are boundary edges.
-        let mut edges: HashMap<(usize, usize), (usize, usize)> = HashMap::new();
+        let mut edges: HashMap<SDEdge, (usize, usize)> = HashMap::new();
         let faces = &mut sd_surface.faces;
         for f_index in 0..faces.len() {
             for e_index in 0..3 {
-                let edge = (
+                let edge = SDEdge::new(
                     faces[f_index].vertices[e_index],
                     faces[f_index].vertices[next(e_index)],
                 );
                 // Assuming consistent orientation of triangles over the entire mesh. Thus,
-                // when two faces share an edge, the edge is given in opposite direction.
-                if let Some((neighbour, neighbour_e_index)) = edges.remove(&(edge.1, edge.0)) {
+                // at most two faces share an edge.
+                if let Some((neighbour, neighbour_e_index)) = edges.remove(&edge) {
                     // Edge has been seen before and so is removed and neighbouring faces are updated.
                     faces[f_index].neighbours[e_index] = Some(neighbour);
                     faces[neighbour].neighbours[neighbour_e_index] = Some(f_index);
@@ -178,23 +198,20 @@ impl SDSurface {
             vertex.point = new_point
         }
 
-        // Compute new additional vertices
+        // Compute new additional vertices which all lie on an existing edge.
         // `edges` is a map from edges to vertex index in `new_vertices`.
-        let mut edges: HashMap<(usize, usize), usize> = HashMap::new();
+        let mut edges: HashMap<SDEdge, usize> = HashMap::new();
         for f_index in 0..self.faces.len() {
             let face = &self.faces[f_index];
             for i in 0..3 {
-                // Edges will be ordered pairs.
-                let mut edge = [face.vertices[i], face.vertices[next(i)]];
-                edge.sort();
-                let edge = (edge[0], edge[1]);
+                let edge = SDEdge::new(face.vertices[i], face.vertices[next(i)]);
                 if edges.contains_key(&edge) {
                     // Vertex has already been created
                     continue;
                 }
 
                 // Record that vertex on this edge will be created
-                edges.insert(edge, self.vertices.len());
+                edges.insert(edge.clone(), self.vertices.len());
 
                 // Added vertices are always incident to the central 4th child of a face.
                 let reference_face = 4 * (f_index + 1);
@@ -202,8 +219,8 @@ impl SDSurface {
                 if let Some(f2_index) = face.neighbours[i] {
                     // Edge is NOT a boundary edge => created vertex is NOT on the boundary
                     let face2 = &self.faces[f2_index];
-                    let point = 3.0 / 8.0 * self.vertices[edge.0].point
-                        + 3.0 / 8.0 * self.vertices[edge.1].point
+                    let point = 3.0 / 8.0 * self.vertices[edge.v1].point
+                        + 3.0 / 8.0 * self.vertices[edge.v2].point
                         + 1.0 / 8.0 * self.vertices[face.vertices[prev(i)]].point
                         + 1.0 / 8.0 * self.vertices[face2.vertices[prev(i)]].point;
                     self.vertices.push(SDVertex {
@@ -212,7 +229,7 @@ impl SDSurface {
                     });
                 } else {
                     // Edge is a boundary edge => created vertex is on the boundary
-                    let point = 0.5 * (self.vertices[edge.0].point + self.vertices[edge.1].point);
+                    let point = 0.5 * (self.vertices[edge.v1].point + self.vertices[edge.v2].point);
                     self.vertices.push(SDVertex {
                         point,
                         reference_face,
@@ -231,9 +248,8 @@ impl SDSurface {
                 new_faces[child(i)].vertices[i] = face.vertices[i];
                 // For each old vertex a new vertex has been added along the edge (`i`, `next(i)`)
                 // This vertex is belongs to three children of the current face
-                let vertex = *edges
-                    .get(&(face.vertices[i], face.vertices[next(i)]))
-                    .unwrap();
+                let edge = SDEdge::new(face.vertices[i], face.vertices[next(i)]);
+                let vertex = *edges.get(&edge).unwrap();
                 new_faces[child(i)].vertices[next(i)] = vertex;
                 new_faces[child(next(i))].vertices[i] = vertex;
                 new_faces[child(3)].vertices[i] = vertex;

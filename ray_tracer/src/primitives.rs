@@ -21,7 +21,7 @@ impl Surface for Sphere {
     fn hit(&self, ray: &Ray, t_min: f32, t_max: f32) -> Option<(f32, Vec3D)> {
         let r_oc: Vec3D = ray.origin - self.center;
         let a = ray.direction.norm_squared();
-        let half_b = Vec3D::dot(&ray.direction, &r_oc);
+        let half_b = Vec3D::dot(ray.direction, r_oc);
         let c = r_oc.norm_squared() - self.radius * self.radius;
         let d = half_b * half_b - a * c;
 
@@ -59,21 +59,21 @@ pub struct Plane {
 }
 
 impl Plane {
-    pub fn new(p: Point3D, mut normal: Vec3D) -> Self {
-        normal.normalise();
-        let d = -Vec3D::dot(&p, &normal);
+    pub fn new(p: Point3D, normal: Vec3D) -> Self {
+        let normal = normal.normalise();
+        let d = -Vec3D::dot(p, normal);
         Self { d, normal }
     }
 }
 
 impl Surface for Plane {
     fn hit(&self, ray: &Ray, t_min: f32, t_max: f32) -> Option<(f32, Vec3D)> {
-        let denom = Vec3D::dot(&self.normal, &ray.direction);
+        let denom = Vec3D::dot(self.normal, ray.direction);
         if denom == 0.0 {
             return None;
         }
 
-        let t = -(Vec3D::dot(&self.normal, &ray.origin) + self.d) / denom;
+        let t = -(Vec3D::dot(self.normal, ray.origin) + self.d) / denom;
         if t < t_max && t > t_min {
             return Some((t, self.normal));
         } else {
@@ -95,8 +95,8 @@ impl Triangle {
     pub fn new(p1: Point3D, p2: Point3D, p3: Point3D) -> Self {
         let v12 = &p2 - &p1;
         let v23 = &p3 - &p2;
-        let normal = *Vec3D::cross(&v12, &v23).normalise();
-        let d = -Vec3D::dot(&p1, &normal);
+        let normal = Vec3D::cross(v12, v23).normalise();
+        let d = -Vec3D::dot(p1, normal);
         Self {
             p1,
             p2,
@@ -109,12 +109,12 @@ impl Triangle {
 
 impl Surface for Triangle {
     fn hit(&self, ray: &Ray, t_min: f32, t_max: f32) -> Option<(f32, Vec3D)> {
-        let denom = Vec3D::dot(&self.normal, &ray.direction);
+        let denom = Vec3D::dot(self.normal, ray.direction);
         if denom == 0.0 {
             return None;
         }
 
-        let t = -(Vec3D::dot(&self.normal, &ray.origin) + self.d) / denom;
+        let t = -(Vec3D::dot(self.normal, ray.origin) + self.d) / denom;
         if t > t_max || t < t_min {
             return None;
         }
@@ -128,9 +128,9 @@ impl Surface for Triangle {
         let c2 = p - self.p2;
         let c3 = p - self.p3;
 
-        if Vec3D::dot(&self.normal, &Vec3D::cross(&e1, &c1)) < 0.0
-            || Vec3D::dot(&self.normal, &Vec3D::cross(&e2, &c2)) < 0.0
-            || Vec3D::dot(&self.normal, &Vec3D::cross(&e3, &c3)) < 0.0
+        if Vec3D::dot(self.normal, Vec3D::cross(e1, c1)) < 0.0
+            || Vec3D::dot(self.normal, Vec3D::cross(e2, c2)) < 0.0
+            || Vec3D::dot(self.normal, Vec3D::cross(e3, c3)) < 0.0
         {
             return None;
         } else {
@@ -141,8 +141,8 @@ impl Surface for Triangle {
 
 impl Bounded for Triangle {
     fn bounding_box(&self) -> AxisAlignedBoundingBox {
-        let mut upper = Vec3D::zero();
-        let mut lower = Vec3D::zero();
+        let mut upper = Vec3D::ZERO;
+        let mut lower = Vec3D::ZERO;
         for i in 0..3 {
             upper[i] = self.p1[i].max(self.p2[i]).max(self.p3[i]);
             lower[i] = self.p1[i].min(self.p2[i]).min(self.p3[i]);
@@ -160,7 +160,7 @@ pub struct AxisAlignedBoundingBox {
 }
 
 impl AxisAlignedBoundingBox {
-    pub fn new(a: &Point3D, b: &Point3D) -> Self {
+    pub fn new(a: Point3D, b: Point3D) -> Self {
         let lower = Point3D::new(f32::min(a.x, b.x), f32::min(a.y, b.y), f32::min(a.z, b.z));
         let upper = Point3D::new(f32::max(a.x, b.x), f32::max(a.y, b.y), f32::max(a.z, b.z));
         return Self { lower, upper };
@@ -216,7 +216,7 @@ impl Surface for AxisAlignedBoundingBox {
                 return None;
             }
         }
-        return Some((t_min, Vec3D::zero())); // think about normal vector?
+        return Some((t_min, Vec3D::ZERO)); // think about normal vector?
     }
 }
 
@@ -227,7 +227,7 @@ mod tests {
     #[test]
     fn hit_sphere() {
         let sphere = Sphere::new(Point3D::new(1.0, 1.0, 1.0), 1.0);
-        let ray = Ray::new(Point3D::zero(), Vec3D::new(1.0, 1.0, 1.0) / f32::sqrt(3.0));
+        let ray = Ray::new(Point3D::ZERO, Vec3D::new(1.0, 1.0, 1.0) / f32::sqrt(3.0));
         let (t, normal) = sphere.hit(&ray, 0.0, f32::INFINITY).unwrap();
         assert!((f32::sqrt(3.0) - 1.0 - t).abs() < 1e-6);
         assert!((normal.norm() - 1.0).abs() < 1e-6);
@@ -236,7 +236,7 @@ mod tests {
     #[test]
     fn hit_sphere_tangent() {
         let sphere = Sphere::new(Point3D::new(1.0, 1.0, 1.0), 1.0);
-        let ray = Ray::new(Point3D::zero(), Vec3D::new(1.0, 1.0, 0.0) / f32::sqrt(2.0));
+        let ray = Ray::new(Point3D::ZERO, Vec3D::new(1.0, 1.0, 0.0) / f32::sqrt(2.0));
         let (t, normal) = sphere.hit(&ray, 0.0, f32::INFINITY).unwrap();
         assert!((f32::sqrt(2.0) - t).abs() < 1e-6);
         assert!((normal.norm() - 1.0).abs() < 1e-6);
@@ -245,31 +245,31 @@ mod tests {
     #[test]
     fn miss_sphere() {
         let sphere = Sphere::new(Point3D::new(1.0, 1.0, 1.0), 1.0);
-        let ray = Ray::new(Point3D::zero(), Vec3D::e3());
+        let ray = Ray::new(Point3D::ZERO, Vec3D::Z);
         let result = sphere.hit(&ray, 0.0, f32::INFINITY);
         assert_eq!(result, None);
     }
 
     #[test]
     fn hit_bounding_box() {
-        let bounding_box = AABB::new(&Vec3D::e1(), &Vec3D::new(2.0, 2.0, 2.0));
+        let bounding_box = AABB::new(Vec3D::X, Vec3D::new(2.0, 2.0, 2.0));
 
-        let ray = Ray::new(Vec3D::zero(), Vec3D::ones());
+        let ray = Ray::new(Vec3D::ZERO, Vec3D::ONES);
         assert_eq!(
             bounding_box.hit(&ray, 0.0, 10.0),
-            Some((1.0, Vec3D::zero()))
+            Some((1.0, Vec3D::ZERO))
         );
 
-        let ray = Ray::new(Vec3D::zero(), -Vec3D::ones());
+        let ray = Ray::new(Vec3D::ZERO, -Vec3D::ONES);
         assert_eq!(bounding_box.hit(&ray, 0.0, 10.0), None);
     }
 
     #[test]
     fn combine_bounding_boxes() {
-        let box1 = AABB::new(&Vec3D::e1(), &Vec3D::new(2.0, 2.0, 2.0));
-        let box2 = AABB::new(&Vec3D::zero(), &Vec3D::new(3.0, 0.5, 0.5));
+        let box1 = AABB::new(Vec3D::X, Vec3D::new(2.0, 2.0, 2.0));
+        let box2 = AABB::new(Vec3D::ZERO, Vec3D::new(3.0, 0.5, 0.5));
         let result = AABB::combine(&box1, &box2);
-        let expected = AABB::new(&Vec3D::zero(), &Vec3D::new(3.0, 2.0, 2.0));
+        let expected = AABB::new(Vec3D::ZERO, Vec3D::new(3.0, 2.0, 2.0));
 
         assert_eq!(result, expected);
     }

@@ -1,6 +1,3 @@
-#[macro_use]
-extern crate impl_ops;
-
 mod vec3d;
 pub use vec3d::Vec3D;
 pub type Point3D = Vec3D;
@@ -12,6 +9,7 @@ pub mod primitives;
 pub mod stl;
 pub mod traits;
 pub mod subdivision_surface;
+pub mod triangle_mesh;
 
 #[derive(Debug, Copy, Clone)]
 pub struct Ray {
@@ -66,16 +64,16 @@ impl Camera {
         result
     }
 
-    pub fn set_direction(&mut self, mut direction: Point3D) {
+    pub fn set_direction(&mut self, direction: Point3D) {
         let window_height: f32 = 2.0;
         let window_width: f32 = window_height * self.aspect_ratio;
         let focal_length: f32 = 2.0; // Horizontal FOV of 46 degrees
 
-        direction.normalise();
+        let direction = direction.normalise();
 
         self.direction = direction.clone();
-        self.horizontal = Vec3D::cross(&direction, &Vec3D::e3()).normalise() * window_width;
-        self.vertical = Vec3D::cross(&self.horizontal, &direction).normalise() * window_height;
+        self.horizontal = Vec3D::cross(direction, Vec3D::Z).normalise() * window_width;
+        self.vertical = Vec3D::cross(self.horizontal, direction).normalise() * window_height;
         self.lower_left_corner =
             self.origin + direction * focal_length - self.horizontal / 2.0 - self.vertical / 2.0;
     }

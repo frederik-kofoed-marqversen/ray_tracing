@@ -16,10 +16,8 @@ pub fn clamp(val: f32, min: f32, max: f32) -> f32 {
     return val;
 }
 
-fn write_pixel(
-    lock: &mut io::StdoutLock,
-    pixel_colour: Colour,
-) -> io::Result<()> {
+#[inline]
+fn write_pixel(lock: &mut io::StdoutLock, pixel_colour: Colour) -> io::Result<()> {
     writeln!(
         lock,
         "{} {} {}",
@@ -31,10 +29,11 @@ fn write_pixel(
 
 fn sky_colour(ray: &Ray) -> Colour {
     let t = 0.5 * (ray.direction.z / ray.direction.norm() + 1.0);
-    let colour = (1.0 - t) * Colour::ones() + t * Colour::new(0.5, 0.7, 1.0);
+    let colour = (1.0 - t) * Colour::ONES + t * Colour::new(0.5, 0.7, 1.0);
     return colour;
 }
 
+#[inline]
 fn reflection_coefficient(eta: f32, cos_theta: f32) -> f32 {
     let sin_theta = f32::sqrt(1.0 - cos_theta * cos_theta);
     if eta * sin_theta > 1.0 {
@@ -45,17 +44,20 @@ fn reflection_coefficient(eta: f32, cos_theta: f32) -> f32 {
     return r0 + (1.0 - r0) * f32::powi(1.0 - cos_theta, 5);
 }
 
-fn refract(ray_direction: &Vec3D, normal: &Vec3D, eta: f32, cos_theta: f32) -> Vec3D {
+#[inline]
+fn refract(ray_direction: Vec3D, normal: Vec3D, eta: f32, cos_theta: f32) -> Vec3D {
     let refracted_parallel = eta * (ray_direction + cos_theta * normal);
     let refracted_orthogonal = -f32::sqrt(1.0 - refracted_parallel.norm_squared()) * normal;
     return refracted_parallel + refracted_orthogonal;
 }
 
-fn reflect(ray_direction: &Vec3D, normal: &Vec3D) -> Vec3D {
-    ray_direction - 2.0 * Vec3D::dot(&ray_direction, &normal) * normal
+#[inline]
+fn reflect(ray_direction: Vec3D, normal: Vec3D) -> Vec3D {
+    ray_direction - 2.0 * Vec3D::dot(ray_direction, normal) * normal
 }
 
-fn scatter(ray_direction: &Vec3D, normal: &Vec3D, roughness: f32, rng: &mut Rng) -> Vec3D {
+#[inline]
+fn scatter(ray_direction: Vec3D, normal: Vec3D, roughness: f32, rng: &mut Rng) -> Vec3D {
     // Compute scattering direction using true Lambertian distribution.
     // This is done by adding a random unit vector from a spherically symmetric distribution
     // to the normal vector.
@@ -72,9 +74,9 @@ fn scatter(ray_direction: &Vec3D, normal: &Vec3D, roughness: f32, rng: &mut Rng)
 
     // Add scattering direction to ray direction according to roughness
     // roughness=0 => reflection, roughness=1 => diffuse
-    let result = Vec3D::interpolate(ray_direction, &scattered_direction, roughness);
+    let result = Vec3D::interpolate(ray_direction, scattered_direction, roughness);
 
-    return result / result.norm();
+    return result.normalise();
 }
 
 pub struct Engine {
@@ -108,7 +110,7 @@ impl Engine {
 
     fn ray_colour(&self, ray: Ray, depth: u32, rng: &mut Rng) -> Colour {
         if depth == 0 {
-            return Colour::zero();
+            return Colour::ZERO;
         }
         match self.hit(&ray, 0.001, f32::INFINITY) {
             Some((t, mut normal, obj)) => {
@@ -119,7 +121,7 @@ impl Engine {
                 // Compute angle of incidence and normal vector pointing up from surface in direction of where
                 // the ray came from. Also compute eta = n1/n2 where n1 is the refractive index of material
                 // where the ray comes from and n2 that of the material that ray goes into.
-                let mut cos_theta = -Vec3D::dot(&ray.direction, &normal); // cosine of angle of incidence
+                let mut cos_theta = -Vec3D::dot(ray.direction, normal); // cosine of angle of incidence
                 let mut eta = obj.material.refractive_index;
                 if cos_theta < 0.0 {
                     cos_theta = -cos_theta;
@@ -137,25 +139,24 @@ impl Engine {
                 let mut emitted_direction;
                 if rng.f32() < reflection_coefficient {
                     // Reflect
-                    emitted_direction = reflect(&ray.direction, &normal);
+                    emitted_direction = reflect(ray.direction, normal);
                 } else {
                     // Refract
                     emitted_direction =
-                        refract(&ray.direction, &normal, eta.unwrap_or(1.0), cos_theta);
+                        refract(ray.direction, normal, eta.unwrap_or(1.0), cos_theta);
                     // Refracted rays scatter along the negative of the normal vector
                     normal = -normal;
                 };
 
                 // Add scattering from roughness
-                emitted_direction =
-                    scatter(&emitted_direction, &normal, obj.material.roughness, rng);
+                emitted_direction = scatter(emitted_direction, normal, obj.material.roughness, rng);
 
                 // Compute colour of emitted ray
                 let emitted_ray = Ray {
                     origin: intersection,
                     direction: emitted_direction,
                 };
-                let mut colour = obj.material.albedo * self.ray_colour(emitted_ray, depth - 1, rng);
+                let mut colour = Colour::mul_elemwise(obj.material.albedo, self.ray_colour(emitted_ray, depth - 1, rng));
 
                 // Add emitted light from the object
                 if let Some((emission, intensity)) = obj.material.emission {
@@ -166,7 +167,7 @@ impl Engine {
             }
             None => {
                 // return sky_colour(&ray);
-                return Colour::zero();
+                return Colour::ZERO;
             }
         }
     }
@@ -190,7 +191,7 @@ impl Engine {
         for j in (0..image_height).rev() {
             writeln!(err_lock, "Scanlines remaining: {j}")?;
             for i in 0..image_width {
-                let mut colour = Colour::zero();
+                let mut colour = Colour::ZERO;
                 for _ in 0..samples_per_pixel {
                     let u = (i as f32 + rng.f32()) / (image_width - 1) as f32;
                     let v = (j as f32 + rng.f32()) / (image_height - 1) as f32;

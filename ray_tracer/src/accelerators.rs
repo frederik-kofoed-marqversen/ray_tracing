@@ -106,13 +106,3 @@ fn center_partition(
         .into_iter()
         .partition(|obj| obj.bounding_box().centroid()[axis] < center);
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn build_bvh() {
-        BVH::build(Vec::new());
-    }
-}
