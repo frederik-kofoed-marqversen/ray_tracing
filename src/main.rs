@@ -1,17 +1,19 @@
 #![feature(trait_upcasting)]
 
 extern crate ray_tracer;
+use core::f32;
 use ray_tracer::materials::*;
 use ray_tracer::primitives::*;
+use ray_tracer::subdivision_surface::loop_subdivide;
+use ray_tracer::traits::BoundedSurface;
 use ray_tracer::triangle_mesh::*;
 use ray_tracer::{Object, Point3D, Vec3D};
-use ray_tracer::traits::BoundedSurface;
 use std::rc::Rc;
 
 const ASPECT_RATIO: f32 = 16.0 / 9.0;
 const IMAGE_WIDTH: usize = 400;
 const SAMPLES_PER_PIXEL: u32 = 32;
-const RAY_DEPTH: u32 = 6;
+const RAY_DEPTH: u32 = 2;
 
 fn main() -> std::io::Result<()> {
     // Build a world and run the ray-tracing engine to output a bitmap by
@@ -130,6 +132,53 @@ fn main() -> std::io::Result<()> {
     };
 
     let world = vec![baby_yoda, ground, light, ball]; */
+
+    let mesh = ray_tracer::stl::read_stl("./meshes/Tetrahedron.stl")?;
+    let centre = mesh.vertices.iter().sum::<Vec3D>() / mesh.vertices.len() as f32;
+    let ground_level = mesh
+        .vertices
+        .iter()
+        .fold(f32::INFINITY, |min, p| min.min(p.z));
+    let mesh = loop_subdivide(&mesh, 2);
+    let mesh = Rc::new(mesh);
+
+    let triangles = mesh.triangles();
+    let boxed_triangles = triangles
+        .into_iter()
+        .map(|obj| Box::new(obj) as Box<dyn BoundedSurface>)
+        .collect();
+    let bvh = ray_tracer::accelerators::BVH::build(boxed_triangles);
+    let object = Object {
+        surface: bvh,
+        material: Material::diffuse(Colour::fill(0.1)),
+    };
+
+    // let mut camera =
+    //     ray_tracer::Camera::new(centre + 10.0 * Vec3D::e1(), Vec3D::ones(), ASPECT_RATIO);
+    let mut camera = ray_tracer::Camera::new(
+        centre + Vec3D::new_polar(10.0, 0.5*f32::consts::PI, 1.2 * f32::consts::PI),
+        Vec3D::ONES,
+        ASPECT_RATIO,
+    );
+    camera.look_at(centre);
+
+    let light = Object {
+        surface: Box::new(Sphere::new(
+            centre + 2000.0 * Vec3D::Z + 2000.0 * Vec3D::Y,
+            1000.0,
+        )),
+        material: Material::light_source(Colour::ONES, 6.0),
+    };
+
+    let ground = Object {
+        surface: Box::new(Plane::new(
+            Vec3D::new(0.0, 0.0, ground_level - 1.0),
+            Vec3D::Z,
+        )),
+        material: Material::diffuse(Colour::fill(0.8)),
+    };
+
+    let world = vec![object, ground, light];
 
     // Render image
     let eng = ray_tracer::engine::Engine::new(world, camera);
