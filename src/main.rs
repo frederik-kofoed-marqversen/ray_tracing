@@ -12,8 +12,8 @@ use std::rc::Rc;
 
 const ASPECT_RATIO: f32 = 16.0 / 9.0;
 const IMAGE_WIDTH: usize = 400;
-const SAMPLES_PER_PIXEL: u32 = 32;
-const RAY_DEPTH: u32 = 2;
+const SAMPLES_PER_PIXEL: u32 = 100;
+const RAY_DEPTH: u32 = 4;
 
 fn main() -> std::io::Result<()> {
     // Build a world and run the ray-tracing engine to output a bitmap by
@@ -41,18 +41,47 @@ fn main() -> std::io::Result<()> {
         surface: Box::new(Sphere::new(Point3D::new(2.5, -2.5, 0.5), 0.5)),
         material: Material::light_source(Colour::new(0.01, 1.0, 0.01), 2.0),
     });
-    world.push(Object {
-        surface: Box::new(Triangle::new(
-            Point3D::new(-4.5, 2.0, 0.2),
-            Point3D::new(-2.0, 3.0, 0.2),
-            Point3D::new(-3.0, 2.5, 3.2),
-        )),
-        material: Material::mirror(),
-    });
+    // world.push(Object {
+    //     surface: Box::new(Triangle::new(
+    //         Point3D::new(-4.5, 2.0, 0.2),
+    //         Point3D::new(-2.0, 3.0, 0.2),
+    //         Point3D::new(-3.0, 2.5, 3.2),
+    //     )),
+    //     material: Material::mirror(),
+    // });
     world.push(Object {
         surface: Box::new(Sphere::new(Point3D::new(0.0, -1.6, 0.8), 0.75)),
         material: Material::dielectric(Colour::new(1.0, 1.0, 1.0), 1.5),
     });
+
+    /* // Regular tetrahedron centred at (0, 0, 0)
+    let mut mesh = TriangleMesh {
+        vertices: vec![
+            Vec3D::new(1.0, 1.0, 1.0),
+            Vec3D::new(1.0, -1.0, -1.0),
+            Vec3D::new(-1.0, 1.0, -1.0),
+            Vec3D::new(-1.0, -1.0, 1.0),
+        ],
+        triangles: vec![[0, 1, 2], [1, 3, 2], [0, 3, 1], [0, 2, 3]],
+    };
+    let centre = Vec3D::new(-3.0, 2.2, 1.2);
+    for vertex in mesh.vertices.iter_mut() {
+        *vertex *= 2.5;
+        *vertex += centre;
+    }
+    let mesh = loop_subdivide(&mesh, 1);
+    let mesh = Rc::new(mesh);
+
+    let triangles = mesh.triangles();
+    let boxed_triangles = triangles
+        .into_iter()
+        .map(|obj| Box::new(obj) as Box<dyn BoundedSurface>)
+        .collect();
+    let bvh = ray_tracer::accelerators::BVH::build(boxed_triangles);
+    world.push(Object {
+        surface: bvh,
+        material: Material::mirror(),
+    }); */
 
     // Globe
     world.push(Object {
@@ -73,7 +102,7 @@ fn main() -> std::io::Result<()> {
         ASPECT_RATIO,
     ); */
 
-    /* // Use sky_colour() in engine as lightsource.
+    // Use sky_colour() in engine as lightsource.
     let mesh = ray_tracer::stl::read_stl("./meshes/Baby_Yoda.stl")?;
     let mesh = Rc::new(mesh);
     let centre = mesh.vertices.iter().sum::<Vec3D>() / mesh.vertices.len() as f32;
@@ -81,8 +110,9 @@ fn main() -> std::io::Result<()> {
         .vertices
         .iter()
         .fold(f32::INFINITY, |min, p| min.min(p.z));
+    let mesh = loop_subdivide(&mesh, 1);
 
-    let triangles = mesh.triangles();
+    let (_, triangles) = mesh.to_triangles();
     let boxed_triangles = triangles
         .into_iter()
         .map(|obj| Box::new(obj) as Box<dyn BoundedSurface>)
@@ -90,8 +120,8 @@ fn main() -> std::io::Result<()> {
     let bvh = ray_tracer::accelerators::BVH::build(boxed_triangles);
     let baby_yoda = Object {
         surface: bvh,
-        material: Material::dielectric(Colour::new(0.7, 0.7, 0.9), 1.5),
-        // material: Material::diffuse(Colour::fill(0.1))
+        // material: Material::dielectric(Colour::new(0.7, 0.7, 0.9), 1.5),
+        material: Material::diffuse(Colour::fill(0.1))
     };
 
     let ground = Object {
@@ -131,54 +161,7 @@ fn main() -> std::io::Result<()> {
         },
     };
 
-    let world = vec![baby_yoda, ground, light, ball]; */
-
-    let mesh = ray_tracer::stl::read_stl("./meshes/Tetrahedron.stl")?;
-    let centre = mesh.vertices.iter().sum::<Vec3D>() / mesh.vertices.len() as f32;
-    let ground_level = mesh
-        .vertices
-        .iter()
-        .fold(f32::INFINITY, |min, p| min.min(p.z));
-    let mesh = loop_subdivide(&mesh, 2);
-    let mesh = Rc::new(mesh);
-
-    let triangles = mesh.triangles();
-    let boxed_triangles = triangles
-        .into_iter()
-        .map(|obj| Box::new(obj) as Box<dyn BoundedSurface>)
-        .collect();
-    let bvh = ray_tracer::accelerators::BVH::build(boxed_triangles);
-    let object = Object {
-        surface: bvh,
-        material: Material::diffuse(Colour::fill(0.1)),
-    };
-
-    // let mut camera =
-    //     ray_tracer::Camera::new(centre + 10.0 * Vec3D::e1(), Vec3D::ones(), ASPECT_RATIO);
-    let mut camera = ray_tracer::Camera::new(
-        centre + Vec3D::new_polar(10.0, 0.5*f32::consts::PI, 1.2 * f32::consts::PI),
-        Vec3D::ONES,
-        ASPECT_RATIO,
-    );
-    camera.look_at(centre);
-
-    let light = Object {
-        surface: Box::new(Sphere::new(
-            centre + 2000.0 * Vec3D::Z + 2000.0 * Vec3D::Y,
-            1000.0,
-        )),
-        material: Material::light_source(Colour::ONES, 6.0),
-    };
-
-    let ground = Object {
-        surface: Box::new(Plane::new(
-            Vec3D::new(0.0, 0.0, ground_level - 1.0),
-            Vec3D::Z,
-        )),
-        material: Material::diffuse(Colour::fill(0.8)),
-    };
-
-    let world = vec![object, ground, light];
+    let world = vec![baby_yoda, ground, light, ball];
 
     // Render image
     let eng = ray_tracer::engine::Engine::new(world, camera);

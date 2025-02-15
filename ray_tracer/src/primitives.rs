@@ -1,6 +1,7 @@
 use super::traits::{Bounded, Surface};
 use super::{Point3D, Ray, Vec3D};
 
+#[derive(Debug)]
 pub struct Sphere {
     pub center: Point3D,
     pub radius: f32,
@@ -53,6 +54,7 @@ impl Bounded for Sphere {
     }
 }
 
+#[derive(Debug)]
 pub struct Plane {
     d: f32, // distance from origo to plane along the normal direction
     normal: Vec3D,

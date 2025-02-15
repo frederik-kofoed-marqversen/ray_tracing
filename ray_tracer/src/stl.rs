@@ -11,6 +11,7 @@ pub fn read_stl(file_name: &str) -> Result<TriangleMesh> {
     unify_vertices(reader, num_triangles)
 }
 
+#[inline]
 fn read_vector(reader: &mut impl Read) -> Result<Vec3D> {
     Ok(Vec3D::new(
         reader.read_f32::<LittleEndian>()?,
@@ -97,6 +98,7 @@ impl Iterator for STLReader {
     }
 }
 
+#[inline]
 fn to_bits(point: Vec3D) -> (u32, u32, u32) {
     (point.x.to_bits(), point.y.to_bits(), point.z.to_bits())
 }

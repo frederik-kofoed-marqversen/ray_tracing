@@ -28,7 +28,6 @@ impl BoundingVolumeHierarchy {
             },
             _ => {
                 let (left, right) = center_partition(objects);
-
                 let node1 = Self::build(left);
                 let node2 = Self::build(right);
                 let bounding_box =
@@ -81,17 +80,15 @@ impl Surface for BoundingVolumeHierarchy {
 fn center_partition(
     objects: Vec<Box<dyn BoundedSurface>>,
 ) -> (Vec<Box<dyn BoundedSurface>>, Vec<Box<dyn BoundedSurface>>) {
-    let mut upper = objects[0].bounding_box().centroid();
-    let mut lower = upper.clone();
+    let mut upper = Vec3D::fill(f32::NEG_INFINITY);
+    let mut lower = Vec3D::fill(f32::INFINITY);
     for obj in objects[1..].iter() {
         let centroid = obj.bounding_box().centroid();
-        for i in 0..3 {
-            upper[i] = upper[i].max(centroid[i]);
-            lower[i] = lower[i].min(centroid[i]);
-        }
+        upper = Vec3D::max(upper, centroid);
+        lower = Vec3D::min(lower, centroid);
     }
-    let widths = &upper - &lower;
 
+    let widths = upper - lower;
     let mut max_width = 0.0;
     let mut axis = 0;
     for i in 0..3 {

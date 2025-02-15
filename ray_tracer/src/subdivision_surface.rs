@@ -1,13 +1,19 @@
+use core::f32;
 use std::collections::HashMap;
 
 use super::triangle_mesh::TriangleMesh;
 use super::{Point3D, Vec3D};
 
-/// This is an implementation of Loop Subdivision Surface. The basic ideas are from
+/// This is an implementation of Loop Subdivision Surface. The algorithm is laid out in
+/// Hoppe et al. 1994. "Piecewise smooth surface reconstruction". In Proceedings of
+/// SIGGRAPH ’94, Computer Graphics Proceedings, Annual Conference Series, Orlando,
+/// Florida, 295–302.
+///
+/// To properly understand the article i was aided by:
 /// https://pbr-book.org/3ed-2018/Shapes/Subdivision_Surfaces#LoopSubdiv::beta
-/// However, major restructuring and optimisations have been done. They also describe
-/// how to compute vertex normals, and tangent vectors as to make a UV mesh. This
-/// has not been implemented here as of yet.
+///
+/// This is a minimal implementation. As discribed in the paper, much more is possible like
+/// computing vertex normals, and tangent vectors to make a UV mesh.
 pub fn loop_subdivide(mesh: &TriangleMesh, divisions: usize) -> TriangleMesh {
     let mut sd_surface = SDSurface::from_triangle_mesh(mesh);
     for _ in 0..divisions {
@@ -158,22 +164,17 @@ impl SDSurface {
 
             let new_point;
             if !on_boundary {
-                let beta = if valence == 6 {
-                    1.0 / 16.0
-                } else if valence == 3 {
-                    3.0 / 16.0
-                } else {
-                    3.0 / (8 * valence) as f32
-                };
-
+                let n = valence as f32;
+                let a =
+                    5.0 / 8.0 - (3.0 + 2.0 * f32::cos(2.0 * f32::consts::PI / n)).powi(2) / 64.0;
+                let alpha = n * (1.0 - a) / a;
                 let neighbour_sum: Point3D =
                     neighbours.iter().map(|&i| self.vertices[i].point).sum();
-                new_point = (1.0 - valence as f32 * beta) * vertex.point + beta * neighbour_sum;
+                new_point = (alpha * vertex.point + neighbour_sum) / (alpha + n);
             } else {
-                let beta = 1.0 / 8.0;
                 let neighbour_sum = self.vertices[neighbours[0]].point
                     + self.vertices[neighbours[valence - 1]].point;
-                new_point = (1.0 - 2.0 * beta) * vertex.point + beta * neighbour_sum;
+                new_point = (6.0 * vertex.point + neighbour_sum) / 8.0;
             }
 
             // An existing vertex which is the i'th vertex of a face will always be incident to
@@ -283,28 +284,33 @@ impl SDSurface {
     }
 
     fn push_to_limit_surface(&mut self) {
+        // Save updated points in new vector since update depends on old points.
+        let mut limit_points = Vec::with_capacity(self.vertices.len());
         for vertex in 0..self.vertices.len() {
             let (neighbours, on_boundary) = self.vertex_neighbours(vertex);
             let valence = neighbours.len();
             let point = self.vertices[vertex].point;
             if !on_boundary {
-                let beta = if valence == 3 {
-                    3.0 / 16.0
-                } else {
-                    3.0 / (8.0 * valence as f32)
-                };
-                let beta = 1.0 / (valence as f32 + 3.0 / (8.0 * beta));
+                let n = valence as f32;
+                let a =
+                    5.0 / 8.0 - (3.0 + 2.0 * f32::cos(2.0 * f32::consts::PI / n)).powi(2) / 64.0;
+                let omega = 3.0 * n / (8.0 * a);
 
                 let neighbour_sum: Point3D =
                     neighbours.iter().map(|&i| self.vertices[i].point).sum();
-                self.vertices[vertex].point =
-                    (1.0 - valence as f32 * beta) * point + beta * neighbour_sum;
+                let new_point = (omega * point + neighbour_sum) / (omega + n);
+                limit_points.push(new_point);
             } else {
-                let beta = 1.0 / 5.0;
+                // For simplicity we always use regular crease vertex weights.
                 let neighbour_sum = self.vertices[neighbours[0]].point
                     + self.vertices[neighbours[valence - 1]].point;
-                self.vertices[vertex].point = (1.0 - 2.0 * beta) * point + beta * neighbour_sum;
+                let new_point = (3.0 * point + neighbour_sum) / 5.0;
+                limit_points.push(new_point);
             }
+        }
+        // Set vertex points to their new updated points
+        for vertex in 0..self.vertices.len() {
+            self.vertices[vertex].point = limit_points[vertex];
         }
     }
 
@@ -431,5 +437,29 @@ mod tests {
             let face = &sds.faces[i];
             assert_eq!((face.vertices, face.neighbours), checks[i]);
         }
+    }
+
+    #[test]
+    fn topology() {
+        use super::super::stl::read_stl;
+        use std::collections::HashSet;
+
+        let mesh = read_stl("../src/meshes/Baby_Yoda.stl").unwrap();
+        let sds = SDSurface::from_triangle_mesh(&mesh);
+
+        let faces: Vec<(usize, &SDFace)> = sds
+            .faces
+            .iter()
+            .enumerate()
+            .filter(|(_i, face)| face.vertices.contains(&194))
+            .collect();
+
+        let vertices: HashSet<&usize> = faces
+            .iter()
+            .flat_map(|(_i, face)| face.vertices.iter())
+            .collect();
+
+        dbg!(faces);
+        dbg!(vertices);
     }
 }
