@@ -11,10 +11,10 @@ use super::{Point3D, Vec3D};
 ///
 /// The data structure used to keeping track of the topology was inspired by:
 /// https://pbr-book.org/3ed-2018/Shapes/Subdivision_Surfaces#LoopSubdiv::beta
-/// which also discuss the algorithm a bit, helping with understanding the original article.
 ///
 /// This is a minimal implementation. As discribed in the paper, much more is possible like
-/// computing vertex normals, and tangent vectors to make a UV mesh.
+/// computing vertex normals, and tangent vectors to make a UV mesh, and also adding creases
+/// (internal boundaries) to the mesh which are NOT to be smoothed out during subdivision.
 pub fn loop_subdivide(mesh: &TriangleMesh, divisions: usize) -> TriangleMesh {
     let mut sd_surface = SDSurface::from_triangle_mesh(mesh);
     for _ in 0..divisions {
@@ -207,7 +207,7 @@ impl SDSurface {
                 if let Some(f2_index) = face.neighbours[i] {
                     // Edge is NOT a boundary edge => created vertex is NOT on the boundary
                     let face2 = &self.faces[f2_index];
-                    let i2 = face.vertex_index(face.vertices[i]);
+                    let i2 = face2.vertex_index(face.vertices[i]);
                     let point = (3.0 * self.vertices[edge.v1].point
                         + 3.0 * self.vertices[edge.v2].point
                         + self.vertices[face.vertices[prev(i)]].point

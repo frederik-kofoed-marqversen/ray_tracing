@@ -34,7 +34,7 @@ fn scene_tetrahedron() -> (Vec<Object>, Camera) {
         ],
         triangles: vec![[0, 1, 2], [1, 3, 2], [0, 3, 1], [0, 2, 3]],
     };
-    let tetrahedron = loop_subdivide(&tetrahedron, 1);
+    let tetrahedron = loop_subdivide(&tetrahedron, 4);
     let tetrahedron_material = Material::diffuse(Colour::new(1.0, 0.5, 0.5));
 
     // Ground to cast shadows onto
@@ -57,20 +57,17 @@ fn scene_tetrahedron() -> (Vec<Object>, Camera) {
 
     // Prepare scene for rendering
     let (_, triangles) = tetrahedron.to_triangles();
-    let triangles: Vec<Box<dyn BoundedSurface>> = triangles
+    let boxed_triangles: Vec<Box<dyn BoundedSurface>> = triangles
         .into_iter()
         .map(|obj| Box::new(obj) as Box<dyn BoundedSurface>)
         .collect();
-    let mut triangles = triangles
-        .into_iter()
-        .map(|tri| Object {
-            surface: tri,
-            material: tetrahedron_material.clone(),
-        })
-        .collect();
+    let bvh = ray_tracer::accelerators::BVH::build(boxed_triangles);
+    let tetrahedron = Object {
+        surface: bvh,
+        material: tetrahedron_material,
+    };
+    let scene = vec![tetrahedron, ground, light];
 
-    let mut scene = vec![ground, light];
-    scene.append(&mut triangles);
     return (scene, camera);
 }
 
