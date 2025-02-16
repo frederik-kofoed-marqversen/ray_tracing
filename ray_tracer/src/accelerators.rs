@@ -82,7 +82,7 @@ fn center_partition(
 ) -> (Vec<Box<dyn BoundedSurface>>, Vec<Box<dyn BoundedSurface>>) {
     let mut upper = Vec3D::fill(f32::NEG_INFINITY);
     let mut lower = Vec3D::fill(f32::INFINITY);
-    for obj in objects[1..].iter() {
+    for obj in objects.iter() {
         let centroid = obj.bounding_box().centroid();
         upper = Vec3D::max(upper, centroid);
         lower = Vec3D::min(lower, centroid);

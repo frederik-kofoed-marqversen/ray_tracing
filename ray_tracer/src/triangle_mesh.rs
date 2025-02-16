@@ -30,9 +30,9 @@ impl Triangle {
         return triangles.pop().unwrap();
     }
 
-    pub fn vertices(&self) -> [&Point3D; 3] {
+    pub fn vertices(&self) -> [Point3D; 3] {
         let indices = self.mesh.triangles[self.index];
-        return indices.map(|index| &self.mesh.vertices[index]);
+        return indices.map(|index| self.mesh.vertices[index]);
     }
 }
 
@@ -79,14 +79,11 @@ impl Surface for Triangle {
 
 impl Bounded for Triangle {
     fn bounding_box(&self) -> AxisAlignedBoundingBox {
-        let mut upper = Vec3D::ZERO;
-        let mut lower = Vec3D::ZERO;
-        let vertices = self.vertices();
-        for i in 0..3 {
-            upper[i] = vertices
-                .iter()
-                .fold(f32::NEG_INFINITY, |max, p| max.max(p[i]));
-            lower[i] = vertices.iter().fold(f32::INFINITY, |min, p| min.min(p[i]));
+        let mut upper = Vec3D::fill(f32::NEG_INFINITY);
+        let mut lower = Vec3D::fill(f32::INFINITY);
+        for vertex in self.vertices() {
+            upper = Vec3D::max(upper, vertex);
+            lower = Vec3D::min(lower, vertex);
         }
         return AxisAlignedBoundingBox { upper, lower };
     }

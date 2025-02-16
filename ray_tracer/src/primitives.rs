@@ -48,7 +48,7 @@ impl Surface for Sphere {
 impl Bounded for Sphere {
     fn bounding_box(&self) -> AxisAlignedBoundingBox {
         let v = Vec3D::new(self.radius, self.radius, self.radius);
-        let upper = self.center + &v;
+        let upper = self.center + v;
         let lower = self.center - v;
         return AxisAlignedBoundingBox { upper, lower };
     }
@@ -71,7 +71,7 @@ impl Plane {
 impl Surface for Plane {
     fn hit(&self, ray: &Ray, t_min: f32, t_max: f32) -> Option<(f32, Vec3D)> {
         let denom = Vec3D::dot(self.normal, ray.direction);
-        if denom == 0.0 {
+        if denom.abs() < f32::EPSILON {
             return None;
         }
 
@@ -94,35 +94,19 @@ pub struct AxisAlignedBoundingBox {
 
 impl AxisAlignedBoundingBox {
     pub fn new(a: Point3D, b: Point3D) -> Self {
-        let lower = Point3D::new(f32::min(a.x, b.x), f32::min(a.y, b.y), f32::min(a.z, b.z));
-        let upper = Point3D::new(f32::max(a.x, b.x), f32::max(a.y, b.y), f32::max(a.z, b.z));
-        return Self { lower, upper };
+        let upper = Point3D::max(a, b);
+        let lower = Point3D::min(a, b);
+        return Self { upper, lower };
     }
 
     pub fn centroid(&self) -> Point3D {
         (self.upper + self.lower) / 2.0
     }
 
-    pub fn widths(&self) -> [f32; 3] {
-        let mut widths = [0.0; 3];
-        for i in 0..3 {
-            widths[i] = self.upper[i] - self.lower[i];
-        }
-        return widths;
-    }
-
     pub fn combine(a: &Self, b: &Self) -> Self {
-        let lower = Point3D::new(
-            f32::min(a.lower.x, b.lower.x),
-            f32::min(a.lower.y, b.lower.y),
-            f32::min(a.lower.z, b.lower.z),
-        );
-        let upper = Point3D::new(
-            f32::max(a.upper.x, b.upper.x),
-            f32::max(a.upper.y, b.upper.y),
-            f32::max(a.upper.z, b.upper.z),
-        );
-        return Self { lower, upper };
+        let upper = Point3D::max(a.upper, b.upper);
+        let lower = Point3D::min(a.lower, b.lower);
+        return Self { upper, lower };
     }
 }
 
