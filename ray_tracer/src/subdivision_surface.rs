@@ -9,8 +9,9 @@ use super::{Point3D, Vec3D};
 /// SIGGRAPH ’94, Computer Graphics Proceedings, Annual Conference Series, Orlando,
 /// Florida, 295–302.
 ///
-/// To properly understand the article i was aided by:
+/// The data structure used to keeping track of the topology was inspired by:
 /// https://pbr-book.org/3ed-2018/Shapes/Subdivision_Surfaces#LoopSubdiv::beta
+/// which also discuss the algorithm a bit, helping with understanding the original article.
 ///
 /// This is a minimal implementation. As discribed in the paper, much more is possible like
 /// computing vertex normals, and tangent vectors to make a UV mesh.
@@ -210,17 +211,26 @@ impl SDSurface {
                 if let Some(f2_index) = face.neighbours[i] {
                     // Edge is NOT a boundary edge => created vertex is NOT on the boundary
                     let face2 = &self.faces[f2_index];
-                    let point = 3.0 / 8.0 * self.vertices[edge.v1].point
-                        + 3.0 / 8.0 * self.vertices[edge.v2].point
-                        + 1.0 / 8.0 * self.vertices[face.vertices[prev(i)]].point
-                        + 1.0 / 8.0 * self.vertices[face2.vertices[prev(i)]].point;
+                    let i2 = face.vertex_index(face.vertices[i]);
+                    let point = (3.0 * self.vertices[edge.v1].point
+                        + 3.0 * self.vertices[edge.v2].point
+                        + self.vertices[face.vertices[prev(i)]].point
+                        + self.vertices[face2.vertices[next(i2)]].point)
+                        / 8.0;
                     new_vertices.push(SDVertex {
                         point,
                         reference_face,
                     });
                 } else {
-                    // Edge is a boundary edge => created vertex is on the boundary
-                    let point = 0.5 * (self.vertices[edge.v1].point + self.vertices[edge.v2].point);
+                    // Edge is a boundary edge (crease edge)
+                    let valence1 = self.vertex_neighbours(edge.v1).0.len();
+                    let valence2 = self.vertex_neighbours(edge.v2).0.len();
+                    let w1 = if valence1 == 4 { 5.0 } else { 3.0 };
+                    let w2 = if valence2 == 4 { 5.0 } else { 3.0 };
+
+                    let point = (w1 * self.vertices[edge.v1].point
+                        + w2 * self.vertices[edge.v2].point)
+                        / (w1 + w2);
                     new_vertices.push(SDVertex {
                         point,
                         reference_face,
@@ -301,10 +311,10 @@ impl SDSurface {
                 let new_point = (omega * point + neighbour_sum) / (omega + n);
                 limit_points.push(new_point);
             } else {
-                // For simplicity we always use regular crease vertex weights.
+                let weight = if valence == 4 { 4.0 } else { 3.0 };
                 let neighbour_sum = self.vertices[neighbours[0]].point
                     + self.vertices[neighbours[valence - 1]].point;
-                let new_point = (3.0 * point + neighbour_sum) / 5.0;
+                let new_point = (weight * point + neighbour_sum) / (weight + 2.0);
                 limit_points.push(new_point);
             }
         }
@@ -360,13 +370,17 @@ impl SDSurface {
         let mut face = start_face;
         neighbours.push(self.next_vertex(vertex, face));
         while let Some(next_face) = self.next_face(vertex, face) {
+            // Check if back at start => not a boundary
             if next_face == start_face {
-                // Has returned to starting point, and vertex is thus not a boundary point
                 return (neighbours, false);
-            } else {
-                face = next_face;
-                neighbours.push(self.next_vertex(vertex, next_face));
             }
+
+            let neighbour = self.next_vertex(vertex, next_face);
+            if neighbours.contains(&neighbour) {
+                panic!("Bad topology!")
+            }
+            neighbours.push(neighbour);
+            face = next_face;
         }
 
         // A boundary must have been hit.
@@ -437,29 +451,5 @@ mod tests {
             let face = &sds.faces[i];
             assert_eq!((face.vertices, face.neighbours), checks[i]);
         }
-    }
-
-    #[test]
-    fn topology() {
-        use super::super::stl::read_stl;
-        use std::collections::HashSet;
-
-        let mesh = read_stl("../src/meshes/Baby_Yoda.stl").unwrap();
-        let sds = SDSurface::from_triangle_mesh(&mesh);
-
-        let faces: Vec<(usize, &SDFace)> = sds
-            .faces
-            .iter()
-            .enumerate()
-            .filter(|(_i, face)| face.vertices.contains(&194))
-            .collect();
-
-        let vertices: HashSet<&usize> = faces
-            .iter()
-            .flat_map(|(_i, face)| face.vertices.iter())
-            .collect();
-
-        dbg!(faces);
-        dbg!(vertices);
     }
 }

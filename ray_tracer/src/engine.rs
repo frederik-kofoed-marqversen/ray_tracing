@@ -27,12 +27,6 @@ fn write_pixel(lock: &mut io::StdoutLock, pixel_colour: Colour) -> io::Result<()
     )
 }
 
-fn sky_colour(ray: &Ray) -> Colour {
-    let t = 0.5 * (ray.direction.z / ray.direction.norm() + 1.0);
-    let colour = (1.0 - t) * Colour::ONES + t * Colour::new(0.5, 0.7, 1.0);
-    return colour;
-}
-
 #[inline]
 fn reflection_coefficient(eta: f32, cos_theta: f32) -> f32 {
     let sin_theta = f32::sqrt(1.0 - cos_theta * cos_theta);

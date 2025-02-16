@@ -21,6 +21,15 @@ pub struct Triangle {
 }
 
 impl Triangle {
+    pub fn new_lonely(p1: Point3D, p2: Point3D, p3: Point3D) -> Self {
+        let mesh = TriangleMesh {
+            vertices: vec![p1, p2, p3],
+            triangles: vec![[0, 1, 2]],
+        };
+        let (_, mut triangles) = mesh.to_triangles();
+        return triangles.pop().unwrap();
+    }
+
     pub fn vertices(&self) -> [&Point3D; 3] {
         let indices = self.mesh.triangles[self.index];
         return indices.map(|index| &self.mesh.vertices[index]);
@@ -96,7 +105,8 @@ impl TriangleMesh {
     }
 
     /// Attempts to fix the triangle mesh to ensure a globally consistent normal vector field
-    /// (i.e., consistent face orientation). This is guaranteed by enforcing the following rules:
+    /// (i.e., consistent face orientation). For closed surfaces, the normal vector field
+    /// points outwards. This is guaranteed by enforcing the following rules:
     ///
     /// 1. Mesh is a manifold, meaning that each edge is shared by at most two triangles:
     ///    - One triangle for boundary edges.
@@ -104,6 +114,9 @@ impl TriangleMesh {
     ///
     /// 2. The vertex ordering of neighboring triangles ensures that they traverse
     ///    their shared edge in opposite directions.
+    ///
+    /// 3. The signed volume of a closed surface as determined by the divergence theorem
+    ///    should be positive.
     ///
     /// Returns Ok(()) if mesh was successfully fixed. Can fail in one of two ways. Either the
     /// mesh does not define a manifold or the mesh defines a non-orientable surface.
@@ -124,14 +137,13 @@ impl TriangleMesh {
             }
         }
 
+        let mut is_closed = true;
         let mut queue = VecDeque::new();
         let mut checked = vec![false; self.triangles.len()];
-        // Set arbitrarily first triangle as correct orientation
-        // This should be determined by other more rigorous means.
+        // Arbitrarily set first triangle as correct orientation
         queue.push_back(0);
         checked[0] = true;
-
-        // Check that all edges are consistent
+        // Using BFS, fix triangles such that all edges are consistent with this orientation.
         while let Some(triangle) = queue.pop_front() {
             for edge in self.get_edges(triangle) {
                 // Each undirected edge need only be checked once.
@@ -139,6 +151,7 @@ impl TriangleMesh {
                     let neighbour = tris.into_iter().find(|other| other != &triangle);
                     if neighbour.is_none() {
                         // Edge is a boundary => no neighbour to check
+                        is_closed = false;
                         continue;
                     }
                     let neighbour = neighbour.unwrap();
@@ -169,7 +182,46 @@ impl TriangleMesh {
             }
         }
 
+        // At this point the mesh should have a consistent orientation.
+        if is_closed {
+            self.fix_global_orientation();
+        }
+
         return Ok(());
+    }
+
+    /// This works by observing that by the divergence theorem the signed volume
+    /// of a closed surface can be computed as
+    ///     ∫ (x * n_x) dA = ±V
+    /// where x is the x coordinate and n_x is the x-coordinate of the unit normal
+    /// vector. For a triangulated surface, the surface integral can be evaluated
+    /// as a sum over triangles. Over a single triangle the integral evaluates to
+    ///     n_x * A * <x>
+    /// where A is the area of the triangle and <x> the average x coordinate. The
+    /// area of a triangle can be computed as half the length of the non-normalised
+    /// (but oriented) normal vector N that is the cross product of two sides. So:
+    ///     n_x * A = N_x / 2.
+    /// Finally the average x coordinate over any polygon is simply the average x-
+    /// coordinate of the vertices. The formula is finally simplified by the fact
+    /// that we only care about the sign, and so can discard constant factors.
+    fn fix_global_orientation(&mut self) {
+        // Compute signed volume assuming consistent normal vector orientation.
+        let mut volume = 0.0;
+        for triangle in &self.triangles {
+            let vertices = triangle.map(|i| &self.vertices[i]);
+            let e1 = vertices[1] - vertices[0];
+            let e2 = vertices[2] - vertices[0];
+            let normal = Vec3D::cross(e1, e2);
+            let nx = normal.x;
+            let avg_x = vertices.iter().map(|v| v.x).sum::<f32>();
+            volume += nx * avg_x;
+        }
+        // Flip global orientation
+        if volume.is_sign_negative() {
+            for triangle in self.triangles.iter_mut() {
+                triangle.swap(0, 1);
+            }
+        }
     }
 
     #[inline]
@@ -182,4 +234,58 @@ impl TriangleMesh {
 #[inline]
 fn to_undirected(edge: (usize, usize)) -> (usize, usize) {
     (edge.0.min(edge.1), edge.0.max(edge.1))
+}
+
+#[cfg(test)]
+mod tests {
+    use std::iter::zip;
+
+    use super::*;
+
+    fn mesh_eq(mesh1: &TriangleMesh, mesh2: &TriangleMesh) -> bool {
+        for (tri1, tri2) in zip(&mesh1.triangles, &mesh2.triangles) {
+            let mut are_equal = false;
+            for i in 0..3 {
+                let cycle = [tri1[i], tri1[(i + 1) % 3], tri1[(i + 2) % 3]];
+                are_equal ^= &cycle == tri2;
+            }
+            if !are_equal {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    #[test]
+    fn fix_mesh() {
+        // use super::super::stl::read_stl;
+        // let mut mesh: TriangleMesh = read_stl("../src/meshes/Baby_Yoda.stl").unwrap();
+
+        // Properly oriented mesh
+        let original = TriangleMesh {
+            vertices: vec![
+                Vec3D::new(1.0, 1.0, 1.0),
+                Vec3D::new(1.0, -1.0, -1.0),
+                Vec3D::new(-1.0, 1.0, -1.0),
+                Vec3D::new(-1.0, -1.0, 1.0),
+            ],
+            triangles: vec![[0, 1, 2], [1, 3, 2], [0, 3, 1], [0, 2, 3]],
+        };
+
+        // Make non-consistent clone. By flipping the orientation of the first
+        // triangle, we also test that the global orientation is fixed.
+        let mut mesh = TriangleMesh {
+            vertices: original.vertices.clone(),
+            triangles: original.triangles.clone(),
+        };
+        mesh.triangles[0].swap(0, 1);
+        mesh.triangles[1].swap(2, 1);
+
+        assert!(!mesh_eq(&original, &mesh));
+
+        // Try fix
+        let result = mesh.try_fix_mesh();
+        assert!(result.is_ok());
+        assert!(mesh_eq(&original, &mesh));
+    }
 }

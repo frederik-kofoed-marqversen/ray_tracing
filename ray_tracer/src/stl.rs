@@ -1,4 +1,3 @@
-use byteorder::{LittleEndian, ReadBytesExt};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufReader, Error, ErrorKind, Read, Result};
@@ -11,32 +10,24 @@ pub fn read_stl(file_name: &str) -> Result<TriangleMesh> {
     unify_vertices(reader, num_triangles)
 }
 
-#[inline]
-fn read_vector(reader: &mut impl Read) -> Result<Vec3D> {
-    Ok(Vec3D::new(
-        reader.read_f32::<LittleEndian>()?,
-        reader.read_f32::<LittleEndian>()?,
-        reader.read_f32::<LittleEndian>()?,
-    ))
-}
-
 struct STLReader {
-    remaining_triangles: usize,
+    remaining_triangles: u32,
     reader: BufReader<File>,
 }
 
 impl STLReader {
-    fn new(file_name: &str) -> Result<(Self, usize)> {
+    fn new(file_name: &str) -> Result<(Self, u32)> {
         let file = File::open(file_name)?;
         let mut reader = BufReader::new(file);
 
         // Read the 80-byte file header
         let mut header = [0; 80];
         reader.read_exact(&mut header)?;
-        let _header = std::str::from_utf8(&header);
 
         // Read the expected number of triangles
-        let num_triangles = reader.read_u32::<LittleEndian>()? as usize;
+        let mut num_triangles = [0; 4];
+        reader.read_exact(&mut num_triangles)?;
+        let num_triangles = u32::from_le_bytes(num_triangles);
 
         Ok((
             Self {
@@ -46,6 +37,49 @@ impl STLReader {
             num_triangles,
         ))
     }
+
+    fn read_vector(&mut self) -> Result<Vec3D> {
+        let mut bytes = [[0; 4]; 3];
+
+        self.reader.read_exact(&mut bytes[0])?;
+        self.reader.read_exact(&mut bytes[1])?;
+        self.reader.read_exact(&mut bytes[2])?;
+
+        let floats = bytes.map(|bytes| f32::from_le_bytes(bytes));
+
+        Ok(Vec3D::from(floats))
+    }
+
+    fn read_attribute(&mut self) -> Result<()> {
+        let mut attribute = [0; 2];
+        self.reader.read_exact(&mut attribute)?;
+        return Ok(());
+    }
+
+    fn read_triangle(&mut self) -> Result<[Vec3D; 3]> {
+        // Read normal vector
+        let _normal = self.read_vector()?;
+
+        // Read triangle
+        let mut triangle = [Vec3D::default(); 3];
+        for i in 0..3 {
+            triangle[i] = self.read_vector()?;
+        }
+
+        // Read the 2-byte attribute data
+        let _attribute = self.read_attribute()?;
+
+        return Ok(triangle);
+    }
+
+    fn eof(&mut self) -> Result<bool> {
+        // Doublecheck if EOF has indeed been reached
+        if self.reader.read(&mut [0])? == 0 {
+            return Ok(true);
+        } else {
+            return Ok(false);
+        }
+    }
 }
 
 impl Iterator for STLReader {
@@ -53,48 +87,22 @@ impl Iterator for STLReader {
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.remaining_triangles == 0 {
-            // Check that EOF has indeed been reached
-            match self.reader.read(&mut [0]) {
-                Err(err) => return Some(Err(err)),
-                Ok(val) => {
-                    if val != 0 {
-                        return Some(Err(Error::new(
-                            ErrorKind::InvalidData,
-                            "Unexpected data after last triangle",
-                        )));
-                    } else {
-                        return None;
-                    }
+            match self.eof() {
+                Ok(true) => return None,
+                Ok(false) => {
+                    return Some(Err(Error::new(
+                        ErrorKind::InvalidData,
+                        "Unexpected data after last triangle",
+                    )))
                 }
-            }
-        }
-
-        // Read normal vector
-        let normal = read_vector(&mut self.reader);
-        match normal {
-            Ok(_) => {}
-            Err(err) => return Some(Err(err)),
-        }
-
-        // Read triangle
-        let mut triangle = [Vec3D::default(); 3];
-        for i in 0..3 {
-            match read_vector(&mut self.reader) {
-                Ok(point) => triangle[i] = point,
                 Err(err) => return Some(Err(err)),
             }
         }
 
+        // Update triangle count
         self.remaining_triangles -= 1;
-
-        // Read the 2-byte attribute data
-        let attribute = self.reader.read_u16::<LittleEndian>();
-        match attribute {
-            Ok(_) => {}
-            Err(err) => return Some(Err(err)),
-        }
-
-        return Some(Ok(triangle));
+        // Read and return triangle
+        return Some(self.read_triangle());
     }
 }
 
@@ -103,11 +111,12 @@ fn to_bits(point: Vec3D) -> (u32, u32, u32) {
     (point.x.to_bits(), point.y.to_bits(), point.z.to_bits())
 }
 
-pub fn unify_vertices(
+fn unify_vertices(
     triangle_stream: impl Iterator<Item = Result<[Vec3D; 3]>>,
-    num_triangles: usize,
+    num_triangles: u32,
 ) -> Result<TriangleMesh> {
     // Loop through all triangles using a HashMap to unify vertices
+    let num_triangles = num_triangles as usize;
     let mut triangles: Vec<[usize; 3]> = Vec::with_capacity(num_triangles);
     let mut vertices: Vec<Vec3D> = Vec::with_capacity(num_triangles / 2);
     let mut vertex_map: HashMap<(u32, u32, u32), usize> = HashMap::with_capacity(num_triangles / 2);

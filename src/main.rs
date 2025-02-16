@@ -1,14 +1,12 @@
 #![feature(trait_upcasting)]
 
 extern crate ray_tracer;
-use core::f32;
 use ray_tracer::materials::*;
 use ray_tracer::primitives::*;
 use ray_tracer::subdivision_surface::loop_subdivide;
 use ray_tracer::traits::BoundedSurface;
 use ray_tracer::triangle_mesh::*;
 use ray_tracer::{Object, Point3D, Vec3D};
-use std::rc::Rc;
 
 const ASPECT_RATIO: f32 = 16.0 / 9.0;
 const IMAGE_WIDTH: usize = 400;
@@ -20,7 +18,7 @@ fn main() -> std::io::Result<()> {
     // running the command: `cargo +nightly run --release > renders/image.ppm`.
     // Install nightly with command: `rustup toolchain install nightly`.
 
-    /* // World setup
+    // World setup
     let mut world = Vec::new();
 
     // Small objects
@@ -41,20 +39,20 @@ fn main() -> std::io::Result<()> {
         surface: Box::new(Sphere::new(Point3D::new(2.5, -2.5, 0.5), 0.5)),
         material: Material::light_source(Colour::new(0.01, 1.0, 0.01), 2.0),
     });
-    // world.push(Object {
-    //     surface: Box::new(Triangle::new(
-    //         Point3D::new(-4.5, 2.0, 0.2),
-    //         Point3D::new(-2.0, 3.0, 0.2),
-    //         Point3D::new(-3.0, 2.5, 3.2),
-    //     )),
-    //     material: Material::mirror(),
-    // });
+    /* world.push(Object {
+        surface: Box::new(Triangle::new_lonely(
+            Point3D::new(-4.5, 2.0, 0.2),
+            Point3D::new(-2.0, 3.0, 0.2),
+            Point3D::new(-3.0, 2.5, 3.2),
+        )),
+        material: Material::mirror(),
+    }); */
     world.push(Object {
         surface: Box::new(Sphere::new(Point3D::new(0.0, -1.6, 0.8), 0.75)),
         material: Material::dielectric(Colour::new(1.0, 1.0, 1.0), 1.5),
     });
 
-    /* // Regular tetrahedron centred at (0, 0, 0)
+    // Regular tetrahedron centred at (0, 0, 0)
     let mut mesh = TriangleMesh {
         vertices: vec![
             Vec3D::new(1.0, 1.0, 1.0),
@@ -64,15 +62,14 @@ fn main() -> std::io::Result<()> {
         ],
         triangles: vec![[0, 1, 2], [1, 3, 2], [0, 3, 1], [0, 2, 3]],
     };
+    // Translate
     let centre = Vec3D::new(-3.0, 2.2, 1.2);
     for vertex in mesh.vertices.iter_mut() {
         *vertex *= 2.5;
         *vertex += centre;
     }
     let mesh = loop_subdivide(&mesh, 1);
-    let mesh = Rc::new(mesh);
-
-    let triangles = mesh.triangles();
+    let (_mesh, triangles) = mesh.to_triangles();
     let boxed_triangles = triangles
         .into_iter()
         .map(|obj| Box::new(obj) as Box<dyn BoundedSurface>)
@@ -80,8 +77,9 @@ fn main() -> std::io::Result<()> {
     let bvh = ray_tracer::accelerators::BVH::build(boxed_triangles);
     world.push(Object {
         surface: bvh,
-        material: Material::mirror(),
-    }); */
+        // material: Material::mirror(),
+        material: Material::metal(Colour::new(1.0, 0.5, 0.5), 0.5),
+    });
 
     // Globe
     world.push(Object {
@@ -100,17 +98,16 @@ fn main() -> std::io::Result<()> {
         Point3D::new(-2.5, -4.0, 3.0),
         Vec3D::new(0.5, 1.0, -0.5),
         ASPECT_RATIO,
-    ); */
+    );
 
-    // Use sky_colour() in engine as lightsource.
+    /* // Use sky_colour() in engine as lightsource.
     let mesh = ray_tracer::stl::read_stl("./meshes/Baby_Yoda.stl")?;
-    let mesh = Rc::new(mesh);
     let centre = mesh.vertices.iter().sum::<Vec3D>() / mesh.vertices.len() as f32;
     let ground_level = mesh
         .vertices
         .iter()
         .fold(f32::INFINITY, |min, p| min.min(p.z));
-    let mesh = loop_subdivide(&mesh, 1);
+    // let mesh = loop_subdivide(&mesh, 1);
 
     let (_, triangles) = mesh.to_triangles();
     let boxed_triangles = triangles
@@ -161,7 +158,7 @@ fn main() -> std::io::Result<()> {
         },
     };
 
-    let world = vec![baby_yoda, ground, light, ball];
+    let world = vec![baby_yoda, ground, light, ball]; */
 
     // Render image
     let eng = ray_tracer::engine::Engine::new(world, camera);

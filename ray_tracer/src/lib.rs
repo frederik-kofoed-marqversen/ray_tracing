@@ -90,19 +90,3 @@ impl Camera {
         )
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn ray_at() {
-        let point = Point3D::new(1.0, 1.0, 1.0);
-        let vec = Vec3D::new(0.0, 1.0, 2.0);
-        let ray = Ray::new(point, vec);
-        let point = ray.at(2.0);
-        assert_eq!(point.x, 1.0);
-        assert_eq!(point.y, 3.0);
-        assert_eq!(point.z, 5.0);
-    }
-}
