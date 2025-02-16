@@ -1,6 +1,6 @@
 pub type Colour = super::Vec3D;
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct Material {
     pub albedo: Colour,
     pub roughness: f32,

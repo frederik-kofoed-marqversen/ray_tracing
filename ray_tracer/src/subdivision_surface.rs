@@ -113,13 +113,10 @@ impl SDSurface {
             })
         }
 
-        // Construct SDSurface object
-        let mut sd_surface = Self { vertices, faces };
-
         // As reference face for each vertex set the index of any neighbouring face.
-        for (f_index, face) in sd_surface.faces.iter().enumerate() {
+        for (f_index, face) in faces.iter().enumerate() {
             for v_index in face.vertices {
-                sd_surface.vertices[v_index].reference_face = f_index;
+                vertices[v_index].reference_face = f_index;
             }
         }
 
@@ -129,7 +126,6 @@ impl SDSurface {
         // the index of that edge into the neighbours field of that face.
         // When we are done, `edges` contains all edges that are boundary edges.
         let mut edges: HashMap<SDEdge, (usize, usize)> = HashMap::new();
-        let faces = &mut sd_surface.faces;
         for f_index in 0..faces.len() {
             for e_index in 0..3 {
                 let edge = SDEdge::new(
@@ -149,7 +145,7 @@ impl SDSurface {
             }
         }
 
-        return sd_surface;
+        return Self { vertices, faces };
     }
 
     fn subdivide(&self) -> Self {

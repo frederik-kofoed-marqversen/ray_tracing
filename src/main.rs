@@ -1,6 +1,8 @@
 #![feature(trait_upcasting)]
 
 extern crate ray_tracer;
+use core::f32;
+
 use ray_tracer::materials::*;
 use ray_tracer::primitives::*;
 use ray_tracer::subdivision_surface::loop_subdivide;
@@ -12,7 +14,7 @@ use ray_tracer::{Object, Point3D, Vec3D};
 const ASPECT_RATIO: f32 = 16.0 / 9.0;
 const IMAGE_WIDTH: usize = 400;
 const SAMPLES_PER_PIXEL: u32 = 100;
-const RAY_DEPTH: u32 = 4;
+const RAY_DEPTH: u32 = 2;
 
 fn main() -> std::io::Result<()> {
     let (scene, camera) = scene_tetrahedron();
@@ -23,8 +25,7 @@ fn main() -> std::io::Result<()> {
 
 #[allow(dead_code)]
 fn scene_tetrahedron() -> (Vec<Object>, Camera) {
-    // Regular tetrahedron centred at (0, 0, 0)
-    let mesh = TriangleMesh {
+    let tetrahedron = TriangleMesh {
         vertices: vec![
             Vec3D::new(1.0, 1.0, 1.0),
             Vec3D::new(1.0, -1.0, -1.0),
@@ -33,26 +34,12 @@ fn scene_tetrahedron() -> (Vec<Object>, Camera) {
         ],
         triangles: vec![[0, 1, 2], [1, 3, 2], [0, 3, 1], [0, 2, 3]],
     };
-
-    let mesh = loop_subdivide(&mesh, 1);
-    let (_mesh, triangles) = mesh.to_triangles();
-    let boxed_triangles: Vec<Box<dyn BoundedSurface>> = triangles
-        .into_iter()
-        .map(|obj| Box::new(obj) as Box<dyn BoundedSurface>)
-        .collect();
-    // let bvh = ray_tracer::accelerators::BVH::build(boxed_triangles);
-    // let tetrahedron = Object {
-    //     surface: bvh,
-    //     material: Material::diffuse(Colour::new(1.0, 0.5, 0.5)),
-    // };
-    let mut triangles = boxed_triangles.into_iter().map(|obj| Object {
-        surface: obj,
-        material: Material::diffuse(Colour::new(1.0, 0.5, 0.5)),
-    }).collect();
+    let tetrahedron = loop_subdivide(&tetrahedron, 1);
+    let tetrahedron_material = Material::diffuse(Colour::new(1.0, 0.5, 0.5));
 
     // Ground to cast shadows onto
     let ground = Object {
-        surface: Box::new(Plane::new(-1.5 * Vec3D::Z, Vec3D::Z)),
+        surface: Box::new(Plane::new(-1.2 * Vec3D::Z, Vec3D::Z)),
         material: Material::diffuse(Colour::ONES * 0.8),
     };
 
@@ -63,13 +50,72 @@ fn scene_tetrahedron() -> (Vec<Object>, Camera) {
     };
 
     // Camera
-    let angle = 0.0 * std::f32::consts::PI;
-    let loc = Vec3D::new_polar(3.0, 0.4 * std::f32::consts::PI, angle);
+    let angle = 0.2 * std::f32::consts::PI;
+    let loc = Vec3D::new_polar(1.0, 0.3 * std::f32::consts::PI, angle);
     let mut camera = ray_tracer::Camera::new(loc, Vec3D::ONES, ASPECT_RATIO);
-    camera.look_at(Point3D::ZERO);
+    camera.look_at(Vec3D::ZERO);
+
+    // Prepare scene for rendering
+    let (_, triangles) = tetrahedron.to_triangles();
+    let triangles: Vec<Box<dyn BoundedSurface>> = triangles
+        .into_iter()
+        .map(|obj| Box::new(obj) as Box<dyn BoundedSurface>)
+        .collect();
+    let mut triangles = triangles
+        .into_iter()
+        .map(|tri| Object {
+            surface: tri,
+            material: tetrahedron_material.clone(),
+        })
+        .collect();
 
     let mut scene = vec![ground, light];
     scene.append(&mut triangles);
+    return (scene, camera);
+}
+
+#[allow(dead_code)]
+fn scene_teapot() -> (Vec<Object>, Camera) {
+    let teapot = ray_tracer::stl::read_stl("./meshes/Utah_teapot.stl").unwrap();
+    let teapot = loop_subdivide(&teapot, 1);
+    let teapot_material = Material::diffuse(Colour::new(1.0, 0.5, 0.5));
+
+    // Ground to cast shadows onto
+    let ground = teapot
+        .vertices
+        .iter()
+        .map(|v| v.z)
+        .fold(f32::INFINITY, |a, b| a.min(b));
+    let ground = Object {
+        surface: Box::new(Plane::new(Vec3D::Z * ground, Vec3D::Z)),
+        material: Material::diffuse(Colour::ONES * 0.8),
+    };
+
+    // Sun for lighting
+    let light = Object {
+        surface: Box::new(Sphere::new(2000.0 * Point3D::new(1.0, 0.0, 1.0), 1000.0)),
+        material: Material::light_source(Colour::ONES, 6.0),
+    };
+
+    // Camera
+    let angle = 0.5 * std::f32::consts::PI;
+    let loc = Vec3D::new_polar(18.0, 0.3 * std::f32::consts::PI, angle);
+    let mut camera = ray_tracer::Camera::new(loc, Vec3D::ONES, ASPECT_RATIO);
+    let centre = teapot.vertices.iter().sum::<Vec3D>() / teapot.vertices.len() as f32;
+    camera.look_at(centre);
+
+    // Prepare scene for rendering
+    let (_, triangles) = teapot.to_triangles();
+    let boxed_triangles: Vec<Box<dyn BoundedSurface>> = triangles
+        .into_iter()
+        .map(|obj| Box::new(obj) as Box<dyn BoundedSurface>)
+        .collect();
+    let bvh = ray_tracer::accelerators::BVH::build(boxed_triangles);
+    let teapot = Object {
+        surface: bvh,
+        material: teapot_material,
+    };
+    let scene = vec![teapot, ground, light];
     return (scene, camera);
 }
 
