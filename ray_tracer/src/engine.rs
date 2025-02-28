@@ -62,7 +62,7 @@ fn scatter(ray_direction: Vec3D, normal: Vec3D, roughness: f32, rng: &mut Rng) -
 
     // Remove almost zero cases to avoid rounding errors.
     // Direction zero is the same as the normal direction.
-    if scattered_direction.almost_zero(1e-12) {
+    if scattered_direction.almost_zero(1e-9) {
         scattered_direction = normal.clone();
     }
 

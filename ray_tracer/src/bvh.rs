@@ -21,6 +21,8 @@ impl Triangle {
 /// to `index + 1`. If on the other hand `num_prim > 0`, then the node contains
 /// primitives and is a leaf node. In that case `index` is the index of the first
 /// primitive.
+/// We use u32 instead of usize to ensure Node has size 32 bytes, which should help
+/// with caching.
 #[derive(Debug)]
 pub struct Node {
     bounding_box: AABB,
@@ -45,7 +47,7 @@ pub struct BoundingVolumeHierarchy {
 }
 
 impl BoundingVolumeHierarchy {
-    pub fn build(triangles: Vec<Triangle>, fast: bool) -> Self {
+    pub fn build(triangles: Vec<Triangle>) -> Self {
         // Initialise BVH.
         // The number of nodes is upper bounded by 2n-1 since the maximal number of
         // leafs is n, and for each layer of m nodes, there are a maximum of 2m
@@ -62,7 +64,7 @@ impl BoundingVolumeHierarchy {
         let root_node = bvh.new_node(0, n as u32);
         bvh.nodes.push(root_node);
         // Recursively subdivide the root node
-        bvh.subdivide_recursive(0, fast);
+        bvh.subdivide_recursive(0);
         bvh.nodes.shrink_to_fit();
 
         return bvh;
@@ -87,27 +89,34 @@ impl BoundingVolumeHierarchy {
         };
     }
 
-    fn subdivide_recursive(&mut self, node_index: usize, fast: bool) {
-        let partition_point;
-        match if fast {
-            self.midpoint_partition_point(node_index)
-        } else {
-            self.sah_partition_point(node_index)
-        } {
-            Some(i) => partition_point = i,
-            None => return,
+    fn subdivide_recursive(&mut self, node_index: usize) {
+        // Compute optimal partition plane
+        let (axis, split_point, cost) = self.binned_sah_partition_plane(node_index);
+
+        // Get node data
+        let node = &self.nodes[node_index];
+        let first_prim = node.index;
+        let num_prim = node.num_prim;
+
+        // Only do partitioning if it improves the BVH
+        let current_cost = num_prim as f32 * node.bounding_box.half_area();
+        if cost >= current_cost {
+            return;
         }
 
-        let first_prim = self.nodes[node_index].index;
+        // Perform partitioning
+        let partition_point = self.partition_sort(first_prim, num_prim, axis, split_point);
+
+        // Catch failed partitioning
         let left_count = partition_point - first_prim;
-        let right_count = self.nodes[node_index].num_prim - left_count;
+        let right_count = num_prim - left_count;
         if left_count == 0 || right_count == 0 {
             // One of the partitions are empty and
             // so the node cannot be subdivided.
             return;
         };
 
-        // Update current node since it is being subdivided
+        // Update current node since it is now being subdivided
         let left_child_index = self.nodes.len();
         let node = &mut self.nodes[node_index];
         node.index = left_child_index as u32;
@@ -120,87 +129,83 @@ impl BoundingVolumeHierarchy {
         self.nodes.push(right_node);
 
         // Recursively subdivide child nodes
-        self.subdivide_recursive(left_child_index, fast);
-        self.subdivide_recursive(left_child_index + 1, fast);
+        self.subdivide_recursive(left_child_index);
+        self.subdivide_recursive(left_child_index + 1);
     }
 
-    fn sah_partition_point(&mut self, node_index: usize) -> Option<u32> {
+    /// Compute the optimal partition plane using binned Surface Area Heuristic
+    fn binned_sah_partition_plane(&mut self, node_index: usize) -> (usize, f32, f32) {
+        // Hardcoded number of bins
+        const BINS: usize = 100;
+
         let node = &self.nodes[node_index];
         let first_prim = node.index;
         let num_prim = node.num_prim;
-
-        // Determine split axis and split point using Surface Area Heuristic
-        let mut axis = 0;
-        let mut split_point = 0.0;
-        let mut cost = f32::INFINITY;
-
-        for test_axis in 0..3 {
-            for triangle in self.get_triangles(first_prim, num_prim) {
-                let test_point = triangle.centroid_axis(test_axis);
-                let test_cost = self.evaluate_sah(node, test_axis, test_point);
-                if test_cost < cost {
-                    axis = test_axis;
-                    split_point = test_point;
-                    cost = test_cost;
-                }
-            }
-        }
-
-        let current_cost = num_prim as f32 * node.bounding_box.half_area();
-        if cost >= current_cost {
-            // Partitioning does not improve the BVH
-            return None;
-        }
-
-        let i = self.partition_sort(first_prim, num_prim, axis, split_point);
-        return Some(i);
-    }
-
-    fn evaluate_sah(&self, node: &Node, axis: usize, pos: f32) -> f32 {
-        let mut left = AABB::empty();
-        let mut right = AABB::empty();
-        let mut left_count = 0;
-        let mut right_count = 0;
-
-        for triangle in self.get_triangles(node.index, node.num_prim) {
-            if triangle.centroid_axis(axis) < pos {
-                left_count += 1;
-                left = AABB::combine(&left, &triangle.bounding_box());
-            } else {
-                right_count += 1;
-                right = AABB::combine(&right, &triangle.bounding_box());
-            }
-        }
-
-        let cost = left_count as f32 * left.half_area() + right_count as f32 * right.half_area();
-        return if cost > 0.0 { cost } else { f32::INFINITY };
-    }
-
-    fn midpoint_partition_point(&mut self, node_index: usize) -> Option<u32> {
-        let node = &self.nodes[node_index];
-        let first_prim = node.index;
-        let num_prim = node.num_prim;
-
-        // Do not partition nodes with less than two primitives
-        if num_prim <= 2 {
-            return None;
-        }
 
         // Construct centroid bounding box
         let centroid_aabb = self
             .get_triangles(first_prim, num_prim)
             .fold(AABB::empty(), |res, tri| res.grow(tri.centroid()));
 
-        // Find largest axis and cut it in half
-        let widths = centroid_aabb.upper - centroid_aabb.lower;
-        let (axis, width) = (0..3)
-            .map(|i| (i, widths[i]))
-            .max_by(|(_, a), (_, b)| a.total_cmp(b))
-            .unwrap();
-        let split_point = centroid_aabb.lower[axis] + 0.5 * width;
+        // Determine optimal partition plane for each axis using binned Surface Area Heuristic
+        let mut axis = 0;
+        let mut split_point = 0.0;
+        let mut cost = f32::INFINITY;
+        for plane_axis in 0..3 {
+            let max = centroid_aabb.upper[plane_axis];
+            let min = centroid_aabb.lower[plane_axis];
+            if (max - min).abs() < f32::EPSILON {
+                continue;
+            }
+            let scale = BINS as f32 / (max - min);
 
-        let i = self.partition_sort(first_prim, num_prim, axis, split_point);
-        return Some(i);
+            // Build bins: (AABB, tri_count)
+            let mut bins = vec![(AABB::empty(), 0); BINS];
+            for triangle in self.get_triangles(first_prim, num_prim) {
+                let bin_index = ((triangle.centroid_axis(plane_axis) - min) * scale) as usize;
+                let bin_index = bin_index.min(BINS - 1);
+                let bin = &mut bins[bin_index];
+                bin.0 = AABB::combine(&bin.0, &triangle.bounding_box());
+                bin.1 += 1;
+            }
+
+            // Initialise data Vecs
+            let mut left_area = vec![0.0; BINS - 1];
+            let mut right_area = vec![0.0; BINS - 1];
+            let mut left_count = vec![0; BINS - 1];
+            let mut right_count = vec![0; BINS - 1];
+
+            // Compute bin data
+            let mut left_box = AABB::empty();
+            let mut right_box = AABB::empty();
+            let mut left_sum = 0;
+            let mut right_sum = 0;
+            for i in 0..BINS - 1 {
+                left_sum += bins[i].1;
+                left_count[i] = left_sum;
+                left_box = AABB::combine(&left_box, &bins[i].0);
+                left_area[i] = left_box.half_area();
+
+                right_sum += bins[BINS - 1 - i].1;
+                right_count[BINS - 2 - i] = right_sum;
+                right_box = AABB::combine(&right_box, &bins[BINS - 1 - i].0);
+                right_area[BINS - 2 - i] = right_box.half_area();
+            }
+
+            // Determine best partition plane
+            let scale = (max - min) / BINS as f32;
+            for i in 0..BINS - 1 {
+                let plane_cost =
+                    left_count[i] as f32 * left_area[i] + right_count[i] as f32 * right_area[i];
+                if plane_cost < cost {
+                    axis = plane_axis;
+                    split_point = min + scale * (i + 1) as f32;
+                    cost = plane_cost;
+                }
+            }
+        }
+
+        return (axis, split_point, cost);
     }
 
     fn partition_sort(

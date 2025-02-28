@@ -12,11 +12,11 @@ use ray_tracer::{Object, Point3D, Vec3D};
 
 const ASPECT_RATIO: f32 = 16.0 / 9.0;
 const IMAGE_WIDTH: usize = 400;
-const SAMPLES_PER_PIXEL: u32 = 100;
-const RAY_DEPTH: u32 = 2;
+const SAMPLES_PER_PIXEL: u32 = 200;
+const RAY_DEPTH: u32 = 6;
 
 fn main() -> std::io::Result<()> {
-    let (scene, camera) = scene_teapot();
+    let (scene, camera) = scene_tetrahedron();
     // Render image
     let eng = ray_tracer::engine::Engine::new(scene, camera);
     return eng.render(ASPECT_RATIO, IMAGE_WIDTH, SAMPLES_PER_PIXEL, RAY_DEPTH);
@@ -33,7 +33,7 @@ fn scene_tetrahedron() -> (Vec<Object>, Camera) {
         ],
         triangles: vec![[0, 1, 2], [1, 3, 2], [0, 3, 1], [0, 2, 3]],
     };
-    let tetrahedron = loop_subdivide(&tetrahedron, 1);
+    let tetrahedron = loop_subdivide(&tetrahedron, 3);
     let tetrahedron_material = Material::diffuse(Colour::new(1.0, 0.5, 0.5));
 
     // Ground to cast shadows onto
@@ -56,7 +56,7 @@ fn scene_tetrahedron() -> (Vec<Object>, Camera) {
 
     // Prepare scene for rendering
     let (_, triangles) = tetrahedron.to_triangles();
-    let bvh = BVH::build(triangles, true);
+    let bvh = BVH::build(triangles);
     let tetrahedron = Object {
         surface: Rc::new(bvh),
         material: tetrahedron_material,
@@ -97,7 +97,7 @@ fn scene_teapot() -> (Vec<Object>, Camera) {
 
     // Prepare scene for rendering
     let (_, triangles) = teapot.to_triangles();
-    let bvh = BVH::build(triangles, true);
+    let bvh = BVH::build(triangles);
     let teapot = Object {
         surface: Rc::new(bvh),
         material: teapot_material,
@@ -113,7 +113,8 @@ fn scene_baby_yoda() -> (Vec<Object>, Camera) {
     // Unfortunately the .stl file is not good and does not define a manifold
     // mesh.try_fix_mesh();
     // let grogu = loop_subdivide(&grogu, 1);
-    let grogu_material = Material::diffuse(Colour::fill(0.1));
+    // let grogu_material = Material::diffuse(Colour::fill(0.1));
+    let grogu_material = Material::dielectric(Colour::new(0.7, 0.7, 0.9), 1.5);
 
     // Ground to cast shadows onto
     let ground = grogu
@@ -164,7 +165,7 @@ fn scene_baby_yoda() -> (Vec<Object>, Camera) {
 
     // Prepare scene for rendering
     let (_, triangles) = grogu.to_triangles();
-    let bvh = BVH::build(triangles, true);
+    let bvh = BVH::build(triangles);
     let grogu = Object {
         surface: Rc::new(bvh),
         material: grogu_material,
