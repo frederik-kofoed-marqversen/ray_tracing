@@ -1,34 +1,48 @@
+use std::rc::Rc;
+
 mod vec3d;
 pub use vec3d::Vec3D;
 pub type Point3D = Vec3D;
 
-pub mod accelerators;
+pub mod bvh;
 pub mod engine;
 pub mod materials;
 pub mod primitives;
 pub mod stl;
-pub mod traits;
 pub mod subdivision_surface;
+pub mod traits;
 pub mod triangle_mesh;
 
 #[derive(Debug, Copy, Clone)]
 pub struct Ray {
     pub origin: Point3D,
     pub direction: Vec3D,
+    pub recip_direction: Vec3D,
 }
 
 impl Ray {
+    #[inline]
     pub fn new(origin: Point3D, direction: Vec3D) -> Self {
-        Self { origin, direction }
+        let recip_direction = Vec3D::new(
+            direction.x.recip(),
+            direction.y.recip(),
+            direction.z.recip(),
+        );
+        Self {
+            origin,
+            direction,
+            recip_direction,
+        }
     }
 
+    #[inline]
     pub fn at(&self, t: f32) -> Point3D {
         self.origin + self.direction * t
     }
 }
 
 pub struct Object {
-    pub surface: Box<dyn traits::Surface>,
+    pub surface: Rc<dyn traits::Surface>,
     pub material: materials::Material,
 }
 
@@ -83,10 +97,8 @@ impl Camera {
     }
 
     pub fn ray(&self, u: f32, v: f32) -> Ray {
-        let direction = self.lower_left_corner + u * self.horizontal + v * self.vertical - self.origin;
-        Ray::new(
-            self.origin.clone(),
-            direction / direction.norm(),
-        )
+        let direction =
+            self.lower_left_corner + u * self.horizontal + v * self.vertical - self.origin;
+        Ray::new(self.origin.clone(), direction / direction.norm())
     }
 }

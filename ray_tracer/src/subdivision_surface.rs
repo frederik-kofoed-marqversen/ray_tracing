@@ -1,4 +1,4 @@
-use core::f32;
+use core::f32::consts::PI;
 use std::collections::HashMap;
 
 use super::triangle_mesh::TriangleMesh;
@@ -163,7 +163,7 @@ impl SDSurface {
             if !on_boundary {
                 let n = valence as f32;
                 let a =
-                    5.0 / 8.0 - (3.0 + 2.0 * f32::cos(2.0 * f32::consts::PI / n)).powi(2) / 64.0;
+                    5.0 / 8.0 - (3.0 + 2.0 * f32::cos(2.0 * PI / n)).powi(2) / 64.0;
                 let alpha = n * (1.0 - a) / a;
                 let neighbour_sum: Point3D =
                     neighbours.iter().map(|&i| self.vertices[i].point).sum();
@@ -235,7 +235,7 @@ impl SDSurface {
             }
         }
 
-        // Initialize new faces. Since each face has 4 children the
+        // Initialize new faces. Since each face has exactly 4 children, the
         // children of face `i` will be at indices 4*i..4*(i+1)
         let mut new_faces: Vec<SDFace> = (0..4 * self.faces.len())
             .map(|_| SDFace {
@@ -283,6 +283,7 @@ impl SDSurface {
         }
 
         // Return new mesh
+        new_vertices.shrink_to_fit();
         return SDSurface {
             vertices: new_vertices,
             faces: new_faces,
@@ -299,7 +300,7 @@ impl SDSurface {
             if !on_boundary {
                 let n = valence as f32;
                 let a =
-                    5.0 / 8.0 - (3.0 + 2.0 * f32::cos(2.0 * f32::consts::PI / n)).powi(2) / 64.0;
+                    5.0 / 8.0 - (3.0 + 2.0 * f32::cos(2.0 * PI / n)).powi(2) / 64.0;
                 let omega = 3.0 * n / (8.0 * a);
 
                 let neighbour_sum: Point3D =

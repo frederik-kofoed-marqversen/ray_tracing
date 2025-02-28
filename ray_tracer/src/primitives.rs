@@ -84,8 +84,6 @@ impl Surface for Plane {
     }
 }
 
-pub type AABB = AxisAlignedBoundingBox;
-
 #[derive(Debug, PartialEq, Clone)]
 pub struct AxisAlignedBoundingBox {
     pub upper: Point3D,
@@ -93,20 +91,50 @@ pub struct AxisAlignedBoundingBox {
 }
 
 impl AxisAlignedBoundingBox {
+    #[inline]
     pub fn new(a: Point3D, b: Point3D) -> Self {
         let upper = Point3D::max(a, b);
         let lower = Point3D::min(a, b);
         return Self { upper, lower };
     }
 
+    #[inline]
+    pub fn empty() -> Self {
+        Self {
+            upper: Vec3D::fill(f32::NEG_INFINITY),
+            lower: Vec3D::fill(f32::INFINITY),
+        }
+    }
+
+    #[inline]
     pub fn centroid(&self) -> Point3D {
         (self.upper + self.lower) / 2.0
     }
 
+    #[inline]
+    pub fn area(&self) -> f32 {
+        self.half_area() * 2.0
+    }
+
+    #[inline]
+    pub fn half_area(&self) -> f32 {
+        let w = self.upper - self.lower; // widths
+        return w.x * w.y + w.y * w.z + w.z * w.x;
+    }
+
+    #[inline]
     pub fn combine(a: &Self, b: &Self) -> Self {
         let upper = Point3D::max(a.upper, b.upper);
         let lower = Point3D::min(a.lower, b.lower);
         return Self { upper, lower };
+    }
+
+    #[inline]
+    pub fn grow(&self, p: Point3D) -> Self {
+        Self {
+            upper: Point3D::max(self.upper, p),
+            lower: Point3D::min(self.lower, p),
+        }
     }
 }
 
@@ -119,27 +147,28 @@ impl Bounded for AxisAlignedBoundingBox {
 impl Surface for AxisAlignedBoundingBox {
     fn hit(&self, ray: &Ray, mut t_min: f32, mut t_max: f32) -> Option<(f32, Vec3D)> {
         for axis in 0..3 {
-            let d_inv = 1.0 / ray.direction[axis];
+            let d_inv = ray.recip_direction[axis];
             let mut t0: f32 = (self.lower[axis] - ray.origin[axis]) * d_inv;
             let mut t1: f32 = (self.upper[axis] - ray.origin[axis]) * d_inv;
             if d_inv < 0.0 {
                 std::mem::swap(&mut t0, &mut t1);
             }
 
-            t_min = f32::max(t0, t_min);
-            t_max = f32::min(t1, t_max);
+            t_min = t_min.max(t0);
+            t_max = t_max.min(t1);
 
             if t_max <= t_min {
                 return None;
             }
         }
-        return Some((t_min, Vec3D::ZERO)); // think about normal vector?
+        return Some((t_min, Vec3D::ZERO)); // Should never need normal vector of AABB
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    type AABB = AxisAlignedBoundingBox;
 
     #[test]
     fn hit_sphere() {
@@ -172,10 +201,7 @@ mod tests {
         let bounding_box = AABB::new(Vec3D::X, Vec3D::new(2.0, 2.0, 2.0));
 
         let ray = Ray::new(Vec3D::ZERO, Vec3D::ONES);
-        assert_eq!(
-            bounding_box.hit(&ray, 0.0, 10.0),
-            Some((1.0, Vec3D::ZERO))
-        );
+        assert_eq!(bounding_box.hit(&ray, 0.0, 10.0), Some((1.0, Vec3D::ZERO)));
 
         let ray = Ray::new(Vec3D::ZERO, -Vec3D::ONES);
         assert_eq!(bounding_box.hit(&ray, 0.0, 10.0), None);

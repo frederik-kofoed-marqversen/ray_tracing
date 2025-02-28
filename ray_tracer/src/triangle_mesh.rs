@@ -30,9 +30,20 @@ impl Triangle {
         return triangles.pop().unwrap();
     }
 
+    #[inline]
     pub fn vertices(&self) -> [Point3D; 3] {
         let indices = self.mesh.triangles[self.index];
-        return indices.map(|index| self.mesh.vertices[index]);
+        indices.map(|index| self.mesh.vertices[index])
+    }
+
+    #[inline]
+    pub fn area_weighted_normal(&self) -> Vec3D {
+        area_weighted_normal(self.vertices())
+    }
+
+    #[inline]
+    pub fn area(&self) -> f32 {
+        self.area_weighted_normal().norm()
     }
 }
 
@@ -46,7 +57,7 @@ impl Surface for Triangle {
         let ray_cross_e2 = Vec3D::cross(ray.direction, e2);
         let det = Vec3D::dot(e1, ray_cross_e2);
 
-        if det > -f32::EPSILON && det < f32::EPSILON {
+        if det.abs() < f32::EPSILON {
             return None; // Ray is parallel to triangle.
         }
 
@@ -78,14 +89,9 @@ impl Surface for Triangle {
 }
 
 impl Bounded for Triangle {
+    #[inline]
     fn bounding_box(&self) -> AxisAlignedBoundingBox {
-        let mut upper = Vec3D::fill(f32::NEG_INFINITY);
-        let mut lower = Vec3D::fill(f32::INFINITY);
-        for vertex in self.vertices() {
-            upper = Vec3D::max(upper, vertex);
-            lower = Vec3D::min(lower, vertex);
-        }
-        return AxisAlignedBoundingBox { upper, lower };
+        self.vertices().iter().fold(AxisAlignedBoundingBox::empty(), |res, v| res.grow(*v))
     }
 }
 
@@ -99,6 +105,43 @@ impl TriangleMesh {
             })
             .collect();
         return (pointer, triangles);
+    }
+
+    #[inline]
+    fn get_edges(&self, triangle: usize) -> [(usize, usize); 3] {
+        let vertices = &self.triangles[triangle];
+        [0, 1, 2].map(|i| (vertices[i], vertices[(i + 1) % 3]))
+    }
+
+    pub fn area_centroid(&self) -> Vec3D {
+        // Average centroid weighted by area.
+        let mut total_area = 0.0;
+        let mut area_centroid = Vec3D::ZERO;
+        for triangle in &self.triangles {
+            let vertices = triangle.map(|i| self.vertices[i]);
+            let area = area_weighted_normal(vertices).norm();
+            let centroid = vertices.iter().sum::<Vec3D>() / 3.0;
+            total_area += area;
+            area_centroid += area * centroid;
+        }
+        return area_centroid / total_area;
+    }
+
+    pub fn volume_centroid(&self) -> Vec3D {
+        // Average centroid weighted by volume.
+        let mut total_volume = 0.0;
+        let mut volume_centroid = Vec3D::ZERO;
+        // For each triangle we compute the signed volume weighted centroid of the
+        // tetrahedron defined by adding the origin point (0, 0, 0) to the triangle.
+        for triangle in &self.triangles {
+            let vertices = triangle.map(|i| self.vertices[i]);
+            let centroid = vertices.iter().sum::<Vec3D>() / 4.0;
+            let signed_volume =
+                Vec3D::dot(vertices[0], Vec3D::cross(vertices[1], vertices[2])) / 6.0;
+            total_volume += signed_volume;
+            volume_centroid += signed_volume * centroid;
+        }
+        return volume_centroid / total_volume;
     }
 
     /// Attempts to fix the triangle mesh to ensure a globally consistent normal vector field
@@ -129,7 +172,7 @@ impl TriangleMesh {
                 entry.push(triangle);
                 if entry.len() > 2 {
                     // More than two triangles share this edge.
-                    return Err("Mesh is not a manifold.");
+                    return Err("Mesh does not define a manifold.");
                 }
             }
         }
@@ -161,7 +204,7 @@ impl TriangleMesh {
                         }
                         (false, true) => {
                             // Neighbour needs to be flipped but is already checked => contradiction
-                            return Err("Mesh not orientable");
+                            return Err("Mesh is not orientable");
                         }
                         (true, false) => {
                             // Add neighbour to queue
@@ -194,22 +237,16 @@ impl TriangleMesh {
     /// vector. For a triangulated surface, the surface integral can be evaluated
     /// as a sum over triangles. Over a single triangle the integral evaluates to
     ///     n_x * A * <x>
-    /// where A is the area of the triangle and <x> the average x coordinate. The
-    /// area of a triangle can be computed as half the length of the non-normalised
-    /// (but oriented) normal vector N that is the cross product of two sides. So:
-    ///     n_x * A = N_x / 2.
-    /// Finally the average x coordinate over any polygon is simply the average x-
-    /// coordinate of the vertices. The formula is finally simplified by the fact
-    /// that we only care about the sign, and so can discard constant factors.
+    /// where A is the area of the triangle and <x> the average x coordinate.
+    /// Notice that n_x * A is actually just the x-coordinate of the area weighted
+    /// normal vector. Final simplification is done by the fact we only care about
+    /// the sign, and so can discard scale factors.
     fn fix_global_orientation(&mut self) {
         // Compute signed volume assuming consistent normal vector orientation.
         let mut volume = 0.0;
         for triangle in &self.triangles {
-            let vertices = triangle.map(|i| &self.vertices[i]);
-            let e1 = vertices[1] - vertices[0];
-            let e2 = vertices[2] - vertices[0];
-            let normal = Vec3D::cross(e1, e2);
-            let nx = normal.x;
+            let vertices = triangle.map(|i| self.vertices[i]);
+            let nx = area_weighted_normal(vertices).x;
             let avg_x = vertices.iter().map(|v| v.x).sum::<f32>();
             volume += nx * avg_x;
         }
@@ -220,12 +257,13 @@ impl TriangleMesh {
             }
         }
     }
+}
 
-    #[inline]
-    fn get_edges(&self, triangle: usize) -> [(usize, usize); 3] {
-        let vertices = &self.triangles[triangle];
-        [0, 1, 2].map(|i| (vertices[i], vertices[(i + 1) % 3]))
-    }
+#[inline]
+fn area_weighted_normal(triangle: [Point3D; 3]) -> Vec3D {
+    let e1 = triangle[1] - triangle[0];
+    let e2 = triangle[2] - triangle[0];
+    return 0.5 * Vec3D::cross(e1, e2);
 }
 
 #[inline]

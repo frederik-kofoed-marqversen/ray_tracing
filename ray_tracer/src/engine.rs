@@ -146,11 +146,11 @@ impl Engine {
                 emitted_direction = scatter(emitted_direction, normal, obj.material.roughness, rng);
 
                 // Compute colour of emitted ray
-                let emitted_ray = Ray {
-                    origin: intersection,
-                    direction: emitted_direction,
-                };
-                let mut colour = Colour::mul_elemwise(obj.material.albedo, self.ray_colour(emitted_ray, depth - 1, rng));
+                let emitted_ray = Ray::new(intersection, emitted_direction);
+                let mut colour = Colour::mul_elemwise(
+                    obj.material.albedo,
+                    self.ray_colour(emitted_ray, depth - 1, rng),
+                );
 
                 // Add emitted light from the object
                 if let Some((emission, intensity)) = obj.material.emission {
