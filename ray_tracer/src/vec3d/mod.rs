@@ -1,7 +1,8 @@
 extern crate fastrand;
 use fastrand::Rng;
-
+mod matrix;
 mod ops;
+pub use matrix::Matrix;
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub struct Vec3D {
