@@ -1,5 +1,4 @@
 extern crate fastrand;
-use super::materials::Colour;
 use super::{Camera, Object, Ray, Vec3D};
 use fastrand::Rng;
 use std::io;
@@ -17,7 +16,7 @@ pub fn clamp(val: f32, min: f32, max: f32) -> f32 {
 }
 
 #[inline]
-fn write_pixel(lock: &mut io::StdoutLock, pixel_colour: Colour) -> io::Result<()> {
+fn write_pixel(lock: &mut io::StdoutLock, pixel_colour: Vec3D) -> io::Result<()> {
     writeln!(
         lock,
         "{} {} {}",
@@ -87,7 +86,7 @@ impl Engine {
         let mut result: Option<(f32, Vec3D, &Object)> = None;
         let mut distance = f32::INFINITY;
         for object in self.objects.iter() {
-            match object.surface.hit(ray, t_min, t_max) {
+            match object.hit(ray, t_min, t_max) {
                 Some((t, normal)) => {
                     // the ray has hit something
                     if t < distance {
@@ -102,9 +101,9 @@ impl Engine {
         return result;
     }
 
-    fn ray_colour(&self, ray: Ray, depth: u32, rng: &mut Rng) -> Colour {
+    fn ray_colour(&self, ray: Ray, depth: u32, rng: &mut Rng) -> Vec3D {
         if depth == 0 {
-            return Colour::ZERO;
+            return Vec3D::ZERO;
         }
         match self.hit(&ray, 0.001, f32::INFINITY) {
             Some((t, mut normal, obj)) => {
@@ -147,7 +146,7 @@ impl Engine {
 
                 // Compute colour of emitted ray
                 let emitted_ray = Ray::new(intersection, emitted_direction);
-                let mut colour = Colour::mul_elemwise(
+                let mut colour = Vec3D::mul_elemwise(
                     obj.material.albedo,
                     self.ray_colour(emitted_ray, depth - 1, rng),
                 );
@@ -161,7 +160,7 @@ impl Engine {
             }
             None => {
                 // return sky_colour(&ray);
-                return Colour::ZERO;
+                return Vec3D::ZERO;
             }
         }
     }
@@ -185,7 +184,7 @@ impl Engine {
         for j in (0..image_height).rev() {
             writeln!(err_lock, "Scanlines remaining: {j}")?;
             for i in 0..image_width {
-                let mut colour = Colour::ZERO;
+                let mut colour = Vec3D::ZERO;
                 for _ in 0..samples_per_pixel {
                     let u = (i as f32 + rng.f32()) / (image_width - 1) as f32;
                     let v = (j as f32 + rng.f32()) / (image_height - 1) as f32;

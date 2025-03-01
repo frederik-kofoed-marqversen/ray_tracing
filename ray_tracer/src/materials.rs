@@ -1,16 +1,16 @@
-pub type Colour = super::Vec3D;
+use super::Vec3D;
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Copy)]
 pub struct Material {
-    pub albedo: Colour,
+    pub albedo: Vec3D,
     pub roughness: f32,
-    pub emission: Option<(Colour, f32)>,
+    pub emission: Option<(Vec3D, f32)>,
     pub refractive_index: Option<f32>,
 }
 
 impl Material {
     #[inline]
-    pub fn diffuse(albedo: Colour) -> Self {
+    pub fn diffuse(albedo: Vec3D) -> Self {
         Self {
             albedo,
             roughness: 1.0,
@@ -20,9 +20,9 @@ impl Material {
     }
 
     #[inline]
-    pub fn light_source(emission: Colour, intensity: f32) -> Self {
+    pub fn light_source(emission: Vec3D, intensity: f32) -> Self {
         Self {
-            albedo: Colour::ZERO,
+            albedo: Vec3D::ZERO,
             roughness: 1.0,
             emission: Some((emission, intensity)),
             refractive_index: None,
@@ -32,7 +32,7 @@ impl Material {
     #[inline]
     pub fn mirror() -> Self {
         Self {
-            albedo: Colour::ONES,
+            albedo: Vec3D::ONES,
             roughness: 0.0,
             emission: None,
             refractive_index: None,
@@ -40,7 +40,7 @@ impl Material {
     }
 
     #[inline]
-    pub fn metal(albedo: Colour, roughness: f32) -> Self {
+    pub fn metal(albedo: Vec3D, roughness: f32) -> Self {
         Self {
             albedo,
             roughness,
@@ -50,7 +50,7 @@ impl Material {
     }
 
     #[inline]
-    pub fn dielectric(albedo: Colour, refractive_index: f32) -> Self {
+    pub fn dielectric(albedo: Vec3D, refractive_index: f32) -> Self {
         Self {
             albedo,
             roughness: 0.0,

@@ -2,7 +2,7 @@ use core::f32::consts::PI;
 use std::collections::HashMap;
 
 use super::triangle_mesh::TriangleMesh;
-use super::{Point3D, Vec3D};
+use super::Vec3D;
 
 /// This is an implementation of Loop Subdivision Surface. The algorithm is laid out in
 /// Hoppe et al. 1994. "Piecewise smooth surface reconstruction". In Proceedings of
@@ -16,7 +16,7 @@ use super::{Point3D, Vec3D};
 /// computing vertex normals, and tangent vectors to make a UV mesh, and also adding creases
 /// (internal boundaries) to the mesh which are NOT to be smoothed out during subdivision.
 pub fn loop_subdivide(mesh: &TriangleMesh, divisions: usize) -> TriangleMesh {
-    let mut sd_surface = SDSurface::from_triangle_mesh(mesh);
+    let mut sd_surface = SubdivisionSurface::from_triangle_mesh(mesh);
     for _ in 0..divisions {
         sd_surface = sd_surface.subdivide();
     }
@@ -36,7 +36,7 @@ fn prev(i: usize) -> usize {
     (i + 2) % 3
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 struct SDVertex {
     point: Vec3D,
     reference_face: usize, // index of any incident face
@@ -66,7 +66,7 @@ impl SDEdge {
 ///   - If `neighbours[i]` is `Some(j)`, then the `j`th face shares the edge given by
 ///     (`vertices[i]`, `vertices[next(i)]`).
 ///   - If `neighbours[i]` is `None`, that edge is a **boundary edge**.
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 struct SDFace {
     vertices: [usize; 3],           // index of vertices in positive order
     neighbours: [Option<usize>; 3], // indices of neighbouring faces.
@@ -84,14 +84,14 @@ impl SDFace {
     }
 }
 
-#[derive(Debug)]
-struct SDSurface {
+#[derive(Debug, Clone)]
+pub struct SubdivisionSurface {
     vertices: Vec<SDVertex>,
     faces: Vec<SDFace>,
 }
 
-impl SDSurface {
-    fn from_triangle_mesh(mesh: &TriangleMesh) -> Self {
+impl SubdivisionSurface {
+    pub fn from_triangle_mesh(mesh: &TriangleMesh) -> Self {
         let mut vertices = Vec::with_capacity(mesh.vertices.len());
         let mut faces = Vec::with_capacity(mesh.triangles.len());
 
@@ -148,7 +148,7 @@ impl SDSurface {
         return Self { vertices, faces };
     }
 
-    fn subdivide(&self) -> Self {
+    pub fn subdivide(&self) -> Self {
         // Vec for storing the new vertices. There is approximately F ≈ 2*V in a triangle mesh.
         // The new mesh will have 4 * F faces, and so approximately 2 * F vertices!
         let mut new_vertices: Vec<SDVertex> = Vec::with_capacity(2 * self.faces.len());
@@ -165,7 +165,7 @@ impl SDSurface {
                 let a =
                     5.0 / 8.0 - (3.0 + 2.0 * f32::cos(2.0 * PI / n)).powi(2) / 64.0;
                 let alpha = n * (1.0 - a) / a;
-                let neighbour_sum: Point3D =
+                let neighbour_sum: Vec3D =
                     neighbours.iter().map(|&i| self.vertices[i].point).sum();
                 new_point = (alpha * vertex.point + neighbour_sum) / (alpha + n);
             } else {
@@ -284,13 +284,13 @@ impl SDSurface {
 
         // Return new mesh
         new_vertices.shrink_to_fit();
-        return SDSurface {
+        return SubdivisionSurface {
             vertices: new_vertices,
             faces: new_faces,
         };
     }
 
-    fn push_to_limit_surface(&mut self) {
+    pub fn push_to_limit_surface(&mut self) {
         // Save updated points in new vector since update depends on old points.
         let mut limit_points = Vec::with_capacity(self.vertices.len());
         for vertex in 0..self.vertices.len() {
@@ -303,7 +303,7 @@ impl SDSurface {
                     5.0 / 8.0 - (3.0 + 2.0 * f32::cos(2.0 * PI / n)).powi(2) / 64.0;
                 let omega = 3.0 * n / (8.0 * a);
 
-                let neighbour_sum: Point3D =
+                let neighbour_sum: Vec3D =
                     neighbours.iter().map(|&i| self.vertices[i].point).sum();
                 let new_point = (omega * point + neighbour_sum) / (omega + n);
                 limit_points.push(new_point);
@@ -321,7 +321,7 @@ impl SDSurface {
         }
     }
 
-    fn to_triangle_mesh(&self) -> TriangleMesh {
+    pub fn to_triangle_mesh(&self) -> TriangleMesh {
         let vertices = self.vertices.iter().map(|v| v.point).collect();
         let triangles = self.faces.iter().map(|f| f.vertices).collect();
         return TriangleMesh {
@@ -405,7 +405,7 @@ mod tests {
             vertices: vec![Vec3D::default(); 5],
             triangles: vec![[0, 1, 4], [1, 2, 4], [2, 3, 4], [3, 0, 4]],
         };
-        let sds = SDSurface::from_triangle_mesh(&mesh);
+        let sds = SubdivisionSurface::from_triangle_mesh(&mesh);
 
         // Check neighbours of boundary vertices
         let neighbours = [vec![1, 4, 3], vec![2, 4, 0], vec![3, 4, 1], vec![0, 4, 2]];
@@ -426,7 +426,7 @@ mod tests {
             triangles: vec![[0, 1, 2]],
         };
 
-        let sds = SDSurface::from_triangle_mesh(&mesh);
+        let sds = SubdivisionSurface::from_triangle_mesh(&mesh);
         let sds = sds.subdivide();
 
         // Check vertices

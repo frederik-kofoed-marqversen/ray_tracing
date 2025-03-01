@@ -1,19 +1,19 @@
 use super::traits::{Bounded, Surface};
-use super::{Point3D, Ray, Vec3D};
+use super::{Vec3D, Ray};
 
 #[derive(Debug)]
 pub struct Sphere {
-    pub center: Point3D,
+    pub center: Vec3D,
     pub radius: f32,
 }
 
 impl Sphere {
-    pub fn new(center: Point3D, radius: f32) -> Self {
+    pub fn new(center: Vec3D, radius: f32) -> Self {
         Self { center, radius }
     }
 
     #[inline]
-    fn normal(&self, point: Point3D) -> Vec3D {
+    fn normal(&self, point: Vec3D) -> Vec3D {
         return (point - self.center) / self.radius;
     }
 }
@@ -61,7 +61,7 @@ pub struct Plane {
 }
 
 impl Plane {
-    pub fn new(p: Point3D, normal: Vec3D) -> Self {
+    pub fn new(p: Vec3D, normal: Vec3D) -> Self {
         let normal = normal.normalise();
         let d = -Vec3D::dot(p, normal);
         Self { d, normal }
@@ -86,15 +86,15 @@ impl Surface for Plane {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct AxisAlignedBoundingBox {
-    pub upper: Point3D,
-    pub lower: Point3D,
+    pub upper: Vec3D,
+    pub lower: Vec3D,
 }
 
 impl AxisAlignedBoundingBox {
     #[inline]
-    pub fn new(a: Point3D, b: Point3D) -> Self {
-        let upper = Point3D::max(a, b);
-        let lower = Point3D::min(a, b);
+    pub fn new(a: Vec3D, b: Vec3D) -> Self {
+        let upper = Vec3D::max(a, b);
+        let lower = Vec3D::min(a, b);
         return Self { upper, lower };
     }
 
@@ -107,7 +107,7 @@ impl AxisAlignedBoundingBox {
     }
 
     #[inline]
-    pub fn centroid(&self) -> Point3D {
+    pub fn centroid(&self) -> Vec3D {
         (self.upper + self.lower) / 2.0
     }
 
@@ -124,30 +124,24 @@ impl AxisAlignedBoundingBox {
 
     #[inline]
     pub fn combine(a: &Self, b: &Self) -> Self {
-        let upper = Point3D::max(a.upper, b.upper);
-        let lower = Point3D::min(a.lower, b.lower);
+        let upper = Vec3D::max(a.upper, b.upper);
+        let lower = Vec3D::min(a.lower, b.lower);
         return Self { upper, lower };
     }
 
     #[inline]
-    pub fn grow(&self, p: Point3D) -> Self {
+    pub fn grow(&self, p: Vec3D) -> Self {
         Self {
-            upper: Point3D::max(self.upper, p),
-            lower: Point3D::min(self.lower, p),
+            upper: Vec3D::max(self.upper, p),
+            lower: Vec3D::min(self.lower, p),
         }
     }
 }
 
-impl Bounded for AxisAlignedBoundingBox {
-    fn bounding_box(&self) -> AxisAlignedBoundingBox {
-        return self.clone();
-    }
-}
-
-impl Surface for AxisAlignedBoundingBox {
-    fn hit(&self, ray: &Ray, mut t_min: f32, mut t_max: f32) -> Option<(f32, Vec3D)> {
+impl AxisAlignedBoundingBox {
+    pub fn hit(&self, ray: &Ray, mut t_min: f32, mut t_max: f32) -> Option<f32> {
         for axis in 0..3 {
-            let d_inv = ray.recip_direction[axis];
+            let d_inv = ray.direction[axis].recip();
             let mut t0: f32 = (self.lower[axis] - ray.origin[axis]) * d_inv;
             let mut t1: f32 = (self.upper[axis] - ray.origin[axis]) * d_inv;
             if d_inv < 0.0 {
@@ -161,7 +155,7 @@ impl Surface for AxisAlignedBoundingBox {
                 return None;
             }
         }
-        return Some((t_min, Vec3D::ZERO)); // Should never need normal vector of AABB
+        return Some(t_min);
     }
 }
 
@@ -172,8 +166,8 @@ mod tests {
 
     #[test]
     fn hit_sphere() {
-        let sphere = Sphere::new(Point3D::new(1.0, 1.0, 1.0), 1.0);
-        let ray = Ray::new(Point3D::ZERO, Vec3D::new(1.0, 1.0, 1.0) / f32::sqrt(3.0));
+        let sphere = Sphere::new(Vec3D::new(1.0, 1.0, 1.0), 1.0);
+        let ray = Ray::new(Vec3D::ZERO, Vec3D::new(1.0, 1.0, 1.0) / f32::sqrt(3.0));
         let (t, normal) = sphere.hit(&ray, 0.0, f32::INFINITY).unwrap();
         assert!((f32::sqrt(3.0) - 1.0 - t).abs() < 1e-6);
         assert!((normal.norm() - 1.0).abs() < 1e-6);
@@ -181,8 +175,8 @@ mod tests {
 
     #[test]
     fn hit_sphere_tangent() {
-        let sphere = Sphere::new(Point3D::new(1.0, 1.0, 1.0), 1.0);
-        let ray = Ray::new(Point3D::ZERO, Vec3D::new(1.0, 1.0, 0.0) / f32::sqrt(2.0));
+        let sphere = Sphere::new(Vec3D::new(1.0, 1.0, 1.0), 1.0);
+        let ray = Ray::new(Vec3D::ZERO, Vec3D::new(1.0, 1.0, 0.0) / f32::sqrt(2.0));
         let (t, normal) = sphere.hit(&ray, 0.0, f32::INFINITY).unwrap();
         assert!((f32::sqrt(2.0) - t).abs() < 1e-6);
         assert!((normal.norm() - 1.0).abs() < 1e-6);
@@ -190,8 +184,8 @@ mod tests {
 
     #[test]
     fn miss_sphere() {
-        let sphere = Sphere::new(Point3D::new(1.0, 1.0, 1.0), 1.0);
-        let ray = Ray::new(Point3D::ZERO, Vec3D::Z);
+        let sphere = Sphere::new(Vec3D::new(1.0, 1.0, 1.0), 1.0);
+        let ray = Ray::new(Vec3D::ZERO, Vec3D::Z);
         let result = sphere.hit(&ray, 0.0, f32::INFINITY);
         assert_eq!(result, None);
     }
@@ -201,7 +195,7 @@ mod tests {
         let bounding_box = AABB::new(Vec3D::X, Vec3D::new(2.0, 2.0, 2.0));
 
         let ray = Ray::new(Vec3D::ZERO, Vec3D::ONES);
-        assert_eq!(bounding_box.hit(&ray, 0.0, 10.0), Some((1.0, Vec3D::ZERO)));
+        assert_eq!(bounding_box.hit(&ray, 0.0, 10.0), Some(1.0));
 
         let ray = Ray::new(Vec3D::ZERO, -Vec3D::ONES);
         assert_eq!(bounding_box.hit(&ray, 0.0, 10.0), None);

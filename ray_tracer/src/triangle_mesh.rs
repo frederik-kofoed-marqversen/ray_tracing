@@ -1,15 +1,17 @@
+use std::collections::{HashMap, VecDeque};
+
 use super::primitives::AxisAlignedBoundingBox;
 use super::traits::{Bounded, Surface};
-use super::{Point3D, Ray, Vec3D};
-use std::collections::{HashMap, VecDeque};
+use super::AffineTransform;
+use super::{Ray, Vec3D};
 use std::rc::Rc;
 
 /// TriangleMesh is defined by a array of vertices. Each triangle is defined by three indices into
 /// that array, one for each corner of the triangle. TriangleMesh does not implement Surface, and
 /// so is basically just a datastructure used to hold triangle data.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TriangleMesh {
-    pub vertices: Vec<Point3D>,
+    pub vertices: Vec<Vec3D>,
     pub triangles: Vec<[usize; 3]>,
 }
 
@@ -21,7 +23,7 @@ pub struct Triangle {
 }
 
 impl Triangle {
-    pub fn new_lonely(p1: Point3D, p2: Point3D, p3: Point3D) -> Self {
+    pub fn new_lonely(p1: Vec3D, p2: Vec3D, p3: Vec3D) -> Self {
         let mesh = TriangleMesh {
             vertices: vec![p1, p2, p3],
             triangles: vec![[0, 1, 2]],
@@ -31,7 +33,7 @@ impl Triangle {
     }
 
     #[inline]
-    pub fn vertices(&self) -> [Point3D; 3] {
+    pub fn vertices(&self) -> [Vec3D; 3] {
         let indices = self.mesh.triangles[self.index];
         indices.map(|index| self.mesh.vertices[index])
     }
@@ -91,7 +93,9 @@ impl Surface for Triangle {
 impl Bounded for Triangle {
     #[inline]
     fn bounding_box(&self) -> AxisAlignedBoundingBox {
-        self.vertices().iter().fold(AxisAlignedBoundingBox::empty(), |res, v| res.grow(*v))
+        self.vertices()
+            .iter()
+            .fold(AxisAlignedBoundingBox::empty(), |res, v| res.grow(*v))
     }
 }
 
@@ -111,6 +115,12 @@ impl TriangleMesh {
     fn get_edges(&self, triangle: usize) -> [(usize, usize); 3] {
         let vertices = &self.triangles[triangle];
         [0, 1, 2].map(|i| (vertices[i], vertices[(i + 1) % 3]))
+    }
+
+    pub fn apply_transform(&mut self, transform: AffineTransform) {
+        self.vertices
+            .iter_mut()
+            .for_each(|v| *v = transform.transform_point(*v));
     }
 
     pub fn area_centroid(&self) -> Vec3D {
@@ -260,7 +270,7 @@ impl TriangleMesh {
 }
 
 #[inline]
-fn area_weighted_normal(triangle: [Point3D; 3]) -> Vec3D {
+fn area_weighted_normal(triangle: [Vec3D; 3]) -> Vec3D {
     let e1 = triangle[1] - triangle[0];
     let e2 = triangle[2] - triangle[0];
     return 0.5 * Vec3D::cross(e1, e2);

@@ -231,6 +231,12 @@ impl BoundingVolumeHierarchy {
     }
 }
 
+impl Bounded for BoundingVolumeHierarchy {
+    fn bounding_box(&self) -> AABB {
+        self.nodes[0].bounding_box.clone()
+    }
+}
+
 impl Surface for BoundingVolumeHierarchy {
     fn hit(&self, ray: &Ray, t_min: f32, mut t_max: f32) -> Option<(f32, Vec3D)> {
         let mut hit = None;
@@ -251,8 +257,8 @@ impl Surface for BoundingVolumeHierarchy {
             // Intersect ray with both children
             let mut child1 = &self.nodes[node.index as usize];
             let mut child2 = &self.nodes[node.index as usize + 1];
-            let hit1 = child1.bounding_box.hit(ray, t_min, t_max).map(|(t, _)| t);
-            let hit2 = child2.bounding_box.hit(ray, t_min, t_max).map(|(t, _)| t);
+            let hit1 = child1.bounding_box.hit(ray, t_min, t_max);
+            let hit2 = child2.bounding_box.hit(ray, t_min, t_max);
 
             // Check if either child is hit and add them to the queue.
             match (hit1, hit2) {
