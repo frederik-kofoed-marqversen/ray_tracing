@@ -15,10 +15,10 @@ use ray_tracer::{Object, Vec3D};
 const ASPECT_RATIO: f32 = 16.0 / 9.0;
 const IMAGE_WIDTH: usize = 400;
 const SAMPLES_PER_PIXEL: u32 = 100;
-const RAY_DEPTH: u32 = 2;
+const RAY_DEPTH: u32 = 4;
 
 fn main() -> std::io::Result<()> {
-    let (scene, camera) = scene_tetrahedra();
+    let (scene, camera) = scene_primitives();
     // Render image
     let eng = ray_tracer::engine::Engine::new(scene, camera);
     return eng.render(ASPECT_RATIO, IMAGE_WIDTH, SAMPLES_PER_PIXEL, RAY_DEPTH);

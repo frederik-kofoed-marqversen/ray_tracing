@@ -1,10 +1,13 @@
 use std::rc::Rc;
 
-mod vec3d;
-pub use vec3d::{Matrix, Vec3D};
-
+pub mod complex;
+pub mod vec3d;
+use vec3d::Matrix;
+pub use vec3d::Vec3D;
+pub mod bsdf;
 pub mod bvh;
 pub mod engine;
+pub mod lights;
 pub mod materials;
 pub mod primitives;
 pub mod stl;
@@ -165,7 +168,7 @@ impl AffineTransform {
             translation: translation,
         };
     }
-    
+
     #[inline]
     pub fn scale_translate(scale: f32, translation: Vec3D) -> Self {
         return Self {
