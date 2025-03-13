@@ -26,52 +26,6 @@ fn write_pixel(lock: &mut io::StdoutLock, pixel_colour: Vec3D) -> io::Result<()>
     )
 }
 
-#[inline]
-fn reflection_coefficient(eta: f32, cos_theta: f32) -> f32 {
-    let sin_theta = f32::sqrt(1.0 - cos_theta * cos_theta);
-    if eta * sin_theta > 1.0 {
-        return 1.0;
-    }
-    // Schlick's approximation
-    let r0 = f32::powi((eta - 1.0) / (eta + 1.0), 2);
-    return r0 + (1.0 - r0) * f32::powi(1.0 - cos_theta, 5);
-}
-
-#[inline]
-fn refract(ray_direction: Vec3D, normal: Vec3D, eta: f32, cos_theta: f32) -> Vec3D {
-    let refracted_parallel = eta * (ray_direction + cos_theta * normal);
-    let refracted_orthogonal = -f32::sqrt(1.0 - refracted_parallel.norm_squared()) * normal;
-    return refracted_parallel + refracted_orthogonal;
-}
-
-#[inline]
-fn reflect(ray_direction: Vec3D, normal: Vec3D) -> Vec3D {
-    ray_direction - 2.0 * Vec3D::dot(ray_direction, normal) * normal
-}
-
-#[inline]
-fn scatter(ray_direction: Vec3D, normal: Vec3D, roughness: f32, rng: &mut Rng) -> Vec3D {
-    // Compute scattering direction using true Lambertian distribution.
-    // This is done by adding a random unit vector from a spherically symmetric distribution
-    // to the normal vector.
-    // roughness=0 => reflection, roughness=1 => diffuse
-
-    let mut scattered_direction = normal + Vec3D::random_rejection(rng);
-    // let mut scattered_direction = &normal + Vec3D::random_direct(rng);  // alternative
-
-    // Remove almost zero cases to avoid rounding errors.
-    // Direction zero is the same as the normal direction.
-    if scattered_direction.almost_zero(1e-9) {
-        scattered_direction = normal.clone();
-    }
-
-    // Add scattering direction to ray direction according to roughness
-    // roughness=0 => reflection, roughness=1 => diffuse
-    let result = Vec3D::interpolate(ray_direction, scattered_direction, roughness);
-
-    return result.normalise();
-}
-
 pub struct Engine {
     objects: Vec<Object>,
     camera: Camera,
@@ -106,46 +60,15 @@ impl Engine {
             return Vec3D::ZERO;
         }
         match self.hit(&ray, 0.001, f32::INFINITY) {
-            Some((t, mut normal, obj)) => {
+            Some((t, normal, obj)) => {
                 // an object has been hit
                 // Compute new emitted ray
                 let intersection = ray.at(t);
 
-                // Compute angle of incidence and normal vector pointing up from surface in direction of where
-                // the ray came from. Also compute eta = n1/n2 where n1 is the refractive index of material
-                // where the ray comes from and n2 that of the material that ray goes into.
-                let mut cos_theta = -Vec3D::dot(ray.direction, normal); // cosine of angle of incidence
-                let mut eta = obj.material.refractive_index;
-                if cos_theta < 0.0 {
-                    cos_theta = -cos_theta;
-                    normal = -normal;
-                } else {
-                    eta = eta.and_then(|n| Some(1.0 / n));
-                }
-
-                // Compute reflection coefficient and compute emitted ray by reflection or refraction
-                let reflection_coefficient = if let Some(eta) = eta {
-                    reflection_coefficient(eta, cos_theta)
-                } else {
-                    1.0
-                };
-                let mut emitted_direction;
-                if rng.f32() < reflection_coefficient {
-                    // Reflect
-                    emitted_direction = reflect(ray.direction, normal);
-                } else {
-                    // Refract
-                    emitted_direction =
-                        refract(ray.direction, normal, eta.unwrap_or(1.0), cos_theta);
-                    // Refracted rays scatter along the negative of the normal vector
-                    normal = -normal;
-                };
-
-                // Add scattering from roughness
-                emitted_direction = scatter(emitted_direction, normal, obj.material.roughness, rng);
+                let emitted_dir = obj.material.sample_bsdf(-ray.direction, normal, rng);
 
                 // Compute colour of emitted ray
-                let emitted_ray = Ray::new(intersection, emitted_direction);
+                let emitted_ray = Ray::new(intersection, emitted_dir);
                 let mut colour = Vec3D::mul_elemwise(
                     obj.material.albedo,
                     self.ray_colour(emitted_ray, depth - 1, rng),

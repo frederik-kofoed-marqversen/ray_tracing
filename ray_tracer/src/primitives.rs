@@ -1,5 +1,7 @@
+use std::f32::consts::PI;
+
 use super::traits::{Bounded, Surface};
-use super::{Vec3D, Ray};
+use super::{Ray, Vec3D};
 
 #[derive(Debug)]
 pub struct Sphere {
@@ -10,6 +12,11 @@ pub struct Sphere {
 impl Sphere {
     pub fn new(center: Vec3D, radius: f32) -> Self {
         Self { center, radius }
+    }
+
+    #[inline]
+    pub fn area(&self) -> f32 {
+        4.0 * PI * self.radius * self.radius
     }
 
     #[inline]
