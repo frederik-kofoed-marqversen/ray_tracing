@@ -8,12 +8,14 @@ pub mod bsdf;
 pub mod bvh;
 pub mod engine;
 pub mod lights;
+use lights::Light;
 pub mod materials;
 pub mod primitives;
 pub mod stl;
 pub mod subdivision_surface;
 pub mod traits;
 pub mod triangle_mesh;
+pub mod path_integrator;
 
 #[derive(Debug, Copy, Clone)]
 pub struct Ray {

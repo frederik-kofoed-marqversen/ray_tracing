@@ -16,9 +16,9 @@ pub struct BSDFSample {
 
 pub trait BSDF {
     // Assume shading coordinates where normal vector is +ẑ
-    fn eval_bsdf(&self, dir_in: Vec3D, dir_out: Vec3D) -> Vec3D;
+    fn eval(&self, dir_in: Vec3D, dir_out: Vec3D) -> Vec3D;
     fn pdf(&self, dir_in: Vec3D, dir_out: Vec3D) -> f32;
-    fn sample_bsdf(&self, dir_out: Vec3D, rng: &mut Rng) -> BSDFSample;
+    fn sample(&self, dir_out: Vec3D, rng: &mut Rng) -> BSDFSample;
 }
 
 pub struct Diffuse {
@@ -26,7 +26,7 @@ pub struct Diffuse {
 }
 
 impl BSDF for Diffuse {
-    fn eval_bsdf(&self, dir_in: Vec3D, dir_out: Vec3D) -> Vec3D {
+    fn eval(&self, dir_in: Vec3D, dir_out: Vec3D) -> Vec3D {
         if dir_in.z * dir_out.z < 0.0 {
             Vec3D::ZERO
         } else {
@@ -42,7 +42,7 @@ impl BSDF for Diffuse {
         }
     }
 
-    fn sample_bsdf(&self, dir_out: Vec3D, rng: &mut Rng) -> BSDFSample {
+    fn sample(&self, dir_out: Vec3D, rng: &mut Rng) -> BSDFSample {
         let mut dir_in = sample_unit_sphere(rng).try_normalise().unwrap_or(Vec3D::Z);
 
         if dir_out.z < 0.0 {
@@ -67,12 +67,12 @@ pub struct Dielectric {
 }
 
 impl BSDF for Dielectric {
-    fn eval_bsdf(&self, _dir_in: Vec3D, _dir_out: Vec3D) -> Vec3D {
+    fn eval(&self, _dir_in: Vec3D, _dir_out: Vec3D) -> Vec3D {
         assert!(self.roughness.is_none()); // currently only smooth surfaces
         Vec3D::ZERO
     }
 
-    fn sample_bsdf(&self, dir_out: Vec3D, rng: &mut Rng) -> BSDFSample {
+    fn sample(&self, dir_out: Vec3D, rng: &mut Rng) -> BSDFSample {
         assert!(self.roughness.is_none()); // currently only smooth surfaces
 
         let cos_out = dir_out.z.abs();
@@ -117,7 +117,7 @@ pub struct Conductor {
 }
 
 impl BSDF for Conductor {
-    fn eval_bsdf(&self, _dir_in: Vec3D, _dir_out: Vec3D) -> Vec3D {
+    fn eval(&self, _dir_in: Vec3D, _dir_out: Vec3D) -> Vec3D {
         assert!(self.roughness.is_none()); // currently only smooth surfaces
         Vec3D::ZERO
     }
@@ -127,7 +127,7 @@ impl BSDF for Conductor {
         0.0
     }
 
-    fn sample_bsdf(&self, dir_out: Vec3D, _rng: &mut Rng) -> BSDFSample {
+    fn sample(&self, dir_out: Vec3D, _rng: &mut Rng) -> BSDFSample {
         assert!(self.roughness.is_none()); // currently only smooth surfaces
 
         // Perfect specular reflection!
