@@ -3,8 +3,12 @@ use std::rc::Rc;
 
 extern crate ray_tracer;
 
+use ray_tracer::bsdf::*;
 use ray_tracer::bvh::BoundingVolumeHierarchy as BVH;
-use ray_tracer::materials::*;
+use ray_tracer::lights;
+use ray_tracer::lights::AreaLight;
+use ray_tracer::lights::Light;
+use ray_tracer::lights::PointLight;
 use ray_tracer::primitives::*;
 use ray_tracer::subdivision_surface as sds;
 use ray_tracer::triangle_mesh::{Triangle, TriangleMesh};
@@ -14,17 +18,17 @@ use ray_tracer::{Object, Vec3D};
 
 const ASPECT_RATIO: f32 = 16.0 / 9.0;
 const IMAGE_WIDTH: usize = 400;
-const SAMPLES_PER_PIXEL: u32 = 100;
+const SAMPLES_PER_PIXEL: u32 = 64;
 const RAY_DEPTH: u32 = 4;
 
 fn main() -> std::io::Result<()> {
-    let (scene, camera) = scene_primitives();
+    let (scene, lights, camera) = scene_primitives();
     // Render image
-    let eng = ray_tracer::engine::Engine::new(scene, camera);
+    let eng = ray_tracer::path_integrator::Engine::new(scene, lights, camera);
     return eng.render(ASPECT_RATIO, IMAGE_WIDTH, SAMPLES_PER_PIXEL, RAY_DEPTH);
 }
 
-#[allow(dead_code)]
+/* #[allow(dead_code)]
 fn scene_tetrahedra() -> (Vec<Object>, Camera) {
     // Compute subdivided tetrahedrons
     let tetrahedron = TriangleMesh {
@@ -140,17 +144,20 @@ fn scene_teapot() -> (Vec<Object>, Camera) {
     let teapot = Object::new(Rc::new(bvh), teapot_material, None);
     let scene = vec![teapot, ground, light];
     return (scene, camera);
-}
+} */
 
 #[allow(dead_code)]
-fn scene_baby_yoda() -> (Vec<Object>, Camera) {
+fn scene_baby_yoda() -> (Vec<Object>, Vec<Rc<dyn Light>>, Camera) {
     // Baby Yoda (Grogu)
-    let grogu = ray_tracer::stl::read_stl("./meshes/Baby_Yoda.stl").unwrap();
+    let grogu = ray_tracer::stl::read_stl("./meshes/baby_yoda.stl").unwrap();
     // Unfortunately the .stl file is not good and does not define a manifold
     // mesh.try_fix_mesh();
     // let grogu = loop_subdivide(&grogu, 1);
     // let grogu_material = Material::diffuse(Vec3D::fill(0.1));
-    let grogu_material = Material::dielectric(Vec3D::new(0.7, 0.7, 0.9), 1.5);
+    let grogu_material = Rc::new(Dielectric {
+        refractive_index: 1.5,
+        roughness: None,
+    });
 
     // Ground to cast shadows onto
     let ground = grogu
@@ -159,7 +166,9 @@ fn scene_baby_yoda() -> (Vec<Object>, Camera) {
         .fold(f32::INFINITY, |min, v| min.min(v.z));
     let ground = Object::new(
         Rc::new(Plane::new(Vec3D::Z * ground, Vec3D::Z)),
-        Material::diffuse(Vec3D::ONES * 0.8),
+        Rc::new(Diffuse {
+            reflectance: Vec3D::ONES * 0.8,
+        }),
         None,
     );
 
@@ -183,24 +192,20 @@ fn scene_baby_yoda() -> (Vec<Object>, Camera) {
     // Set up a sun to light up the scene
     let unit_sphere = Rc::new(Sphere::new(Vec3D::ZERO, 1.0));
 
-    let light = Object::new(
-        unit_sphere.clone(),
-        Material::light_source(Vec3D::ONES, 6.0),
-        Some(Affine::scale_translate(
-            1000.0,
-            centre + 2000.0 * up + 2000.0 * left - 1000.0 * away,
-        )),
-    );
+    let light: Rc<dyn Light> = Rc::new(AreaLight {
+        surface: Sphere {
+            center: centre + 2000.0 * up + 2000.0 * left - 1000.0 * away,
+            radius: 1000.0,
+        },
+        emmited_radiance: Vec3D::ONES * 6.0,
+    });
 
-    // An incandescent ball
+    // A floating ball
     let ball = Object::new(
         unit_sphere.clone(),
-        Material {
-            albedo: Vec3D::new(0.8, 0.2, 0.2),
-            roughness: 0.7,
-            emission: Some((Vec3D::new(1.0, 0.03, 0.03), 1.0)),
-            refractive_index: None,
-        },
+        Rc::new(Diffuse {
+            reflectance: Vec3D::new(0.8, 0.2, 0.2),
+        }),
         Some(Affine::scale_translate(5.0, Vec3D::new(-4.0, 6.0, 59.0))),
     );
 
@@ -208,12 +213,105 @@ fn scene_baby_yoda() -> (Vec<Object>, Camera) {
     let (_, triangles) = grogu.to_triangles();
     let bvh = BVH::build(triangles);
     let grogu = Object::new(Rc::new(bvh), grogu_material, None);
-    let scene = vec![grogu, ground, light, ball];
+    let scene = vec![grogu, ground, ball];
+    let lights = vec![light];
 
-    return (scene, camera);
+    return (scene, lights, camera);
 }
 
 #[allow(dead_code)]
+fn scene_primitives() -> (Vec<Object>, Vec<Rc<dyn Light>>, Camera) {
+    // World setup
+    let mut scene = Vec::new();
+
+    // Small objects
+    scene.push(Object::new(
+        Rc::new(Sphere::new(Vec3D::new(-2.0, 0.0, 0.5), 0.5)),
+        Rc::new(Diffuse {
+            reflectance: Vec3D::new(1.0, 0.01, 0.01),
+        }),
+        None,
+    ));
+    scene.push(Object::new(
+        Rc::new(Sphere::new(Vec3D::new(-0.5, 0.0, 0.8), 0.75)),
+        Rc::new(Conductor {
+            refractive_index: Vec3D::new(1.0, 1.0, 1.0),
+            extinction_coefficient: Vec3D::new(1.0, 1.0, 1.0),
+            // roughness: Some(RoughnessModel {}),
+            roughness: None,
+        }),
+        None,
+    ));
+    scene.push(Object::new(
+        Rc::new(Sphere::new(Vec3D::new(1.5, 0.0, 1.0), 1.0)),
+        Rc::new(Diffuse {
+            reflectance: Vec3D::new(0.01, 0.01, 1.0),
+        }),
+        None,
+    ));
+    scene.push(Object::new(
+        Rc::new(Triangle::new_lonely(
+            Vec3D::new(-4.5, 2.0, 0.2),
+            Vec3D::new(-2.0, 3.0, 0.2),
+            Vec3D::new(-3.0, 2.5, 3.2),
+        )),
+        Rc::new(Conductor {
+            refractive_index: Vec3D::new(1.0, 1.0, 1.0),
+            extinction_coefficient: Vec3D::new(1.0, 1.0, 1.0),
+            roughness: None,
+        }),
+        None,
+    ));
+    scene.push(Object::new(
+        Rc::new(Sphere::new(Vec3D::new(0.0, -1.6, 0.8), 0.75)),
+        Rc::new(Dielectric {
+            refractive_index: 1.5,
+            roughness: None,
+        }),
+        None,
+    ));
+
+    // Globe
+    scene.push(Object::new(
+        Rc::new(Sphere::new(Vec3D::new(0.0, 0.0, -100.0), 100.0)),
+        Rc::new(Diffuse {
+            reflectance: Vec3D::ONES * 0.5,
+        }),
+        None,
+    ));
+
+    // Lights
+    let mut lights: Vec<Rc<dyn Light>> = Vec::new();
+    lights.push(Rc::new(AreaLight {
+        surface: Sphere {
+            center: Vec3D::new(0.0, 110.0, 0.0),
+            radius: 100.0,
+        },
+        emmited_radiance: Vec3D::ONES * 1.0,
+    }));
+    // lights.push(PointLight {
+    //     pos: Vec3D::new(0.0, 110.0, 0.0),
+    //     intensity: Vec3D::ONES * 30000.0,
+    // });
+    lights.push(Rc::new(AreaLight {
+        surface: Sphere {
+            center: Vec3D::new(2.5, -2.5, 0.5),
+            radius: 0.5,
+        },
+        emmited_radiance: Vec3D::new(0.2, 1.0, 0.2),
+    }));
+
+    // Camera
+    let camera = ray_tracer::Camera::new(
+        Vec3D::new(-2.5, -4.0, 3.0),
+        Vec3D::new(0.5, 1.0, -0.5),
+        ASPECT_RATIO,
+    );
+
+    return (scene, lights, camera);
+}
+
+/* #[allow(dead_code)]
 fn scene_primitives() -> (Vec<Object>, Camera) {
     // World setup
     let mut scene = Vec::new();
@@ -277,4 +375,4 @@ fn scene_primitives() -> (Vec<Object>, Camera) {
     );
 
     return (scene, camera);
-}
+} */

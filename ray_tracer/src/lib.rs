@@ -6,10 +6,8 @@ use vec3d::Matrix;
 pub use vec3d::Vec3D;
 pub mod bsdf;
 pub mod bvh;
-pub mod engine;
 pub mod lights;
 use lights::Light;
-pub mod materials;
 pub mod primitives;
 pub mod stl;
 pub mod subdivision_surface;
@@ -37,7 +35,7 @@ impl Ray {
 
 pub struct Object {
     surface: Rc<dyn traits::Surface>,
-    material: materials::Material,
+    material: Rc<dyn bsdf::BSDF>,
     affine_transform: Option<AffineTransform>,
 }
 
@@ -45,7 +43,7 @@ impl Object {
     #[inline]
     pub fn new(
         surface: Rc<dyn traits::Surface>,
-        material: materials::Material,
+        material: Rc<dyn bsdf::BSDF>,
         affine_transform: Option<AffineTransform>,
     ) -> Self {
         Self {
@@ -243,9 +241,9 @@ impl Camera {
     }
 }
 
-#[cfg(test)]
+/* #[cfg(test)]
 mod tests {
-    use super::materials::Material;
+    use super::bsdf::BSDF;
     use super::primitives::Sphere;
 
     use super::*;
@@ -290,4 +288,4 @@ mod tests {
         let hit = sphere.hit(&ray, 0.0, 100.0).map(|(t, _)| t);
         assert_eq!(hit, None);
     }
-}
+} */

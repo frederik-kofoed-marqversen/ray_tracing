@@ -1,12 +1,12 @@
 use super::complex::Complex;
-use super::vec3d::utils::sample_unit_sphere;
+use super::vec3d::utils::{sample_unit_sphere, tangent_space};
 use super::Vec3D;
 use fastrand::Rng;
 use std::f32::consts::PI;
 
 const PI_RECIP: f32 = 1.0 / PI;
 
-pub struct MicroFacetModel {}
+pub struct RoughnessModel {} // Placeholder for roughness models
 
 pub struct BSDFSample {
     pub spectrum: Vec3D,
@@ -14,8 +14,23 @@ pub struct BSDFSample {
     pub dir_in: Vec3D,
 }
 
+pub fn to_local_coords(dir: Vec3D, normal: Vec3D) -> Vec3D {
+    let (v1, v2) = tangent_space(normal);
+    Vec3D::new(
+        Vec3D::dot(dir, v1),
+        Vec3D::dot(dir, v2),
+        Vec3D::dot(dir, normal),
+    )
+}
+
+pub fn to_world_coords(dir: Vec3D, normal: Vec3D) -> Vec3D {
+    let (v1, v2) = tangent_space(normal);
+    dir.x * v1 + dir.y * v2 + dir.z * normal
+}
+
 pub trait BSDF {
     // Assume shading coordinates where normal vector is +ẑ
+    // dir_in and dir_out are both in this local space and both pointing away from the surface
     fn eval(&self, dir_in: Vec3D, dir_out: Vec3D) -> Vec3D;
     fn pdf(&self, dir_in: Vec3D, dir_out: Vec3D) -> f32;
     fn sample(&self, dir_out: Vec3D, rng: &mut Rng) -> BSDFSample;
@@ -28,6 +43,7 @@ pub struct Diffuse {
 impl BSDF for Diffuse {
     fn eval(&self, dir_in: Vec3D, dir_out: Vec3D) -> Vec3D {
         if dir_in.z * dir_out.z < 0.0 {
+            // no transmission through the surface
             Vec3D::ZERO
         } else {
             self.reflectance * PI_RECIP
@@ -62,8 +78,8 @@ impl BSDF for Diffuse {
 }
 
 pub struct Dielectric {
-    refractive_index: f32,
-    roughness: Option<MicroFacetModel>,
+    pub refractive_index: f32,
+    pub roughness: Option<RoughnessModel>,
 }
 
 impl BSDF for Dielectric {
@@ -96,6 +112,7 @@ impl BSDF for Dielectric {
             // if transport_mode is radiance { // when path tracing starting from the camera
             //     spectrum *= eta * eta;
             // }
+            // let spectrum = spectrum * _eta * _eta;
             return BSDFSample {
                 spectrum,
                 pdf: transmission,
@@ -111,9 +128,9 @@ impl BSDF for Dielectric {
 }
 
 pub struct Conductor {
-    refractive_index: Vec3D,       // Frequency dependent
-    extinction_coefficient: Vec3D, // Frequency dependent
-    roughness: Option<MicroFacetModel>,
+    pub refractive_index: Vec3D,       // Frequency dependent
+    pub extinction_coefficient: Vec3D, // Frequency dependent
+    pub roughness: Option<RoughnessModel>,
 }
 
 impl BSDF for Conductor {

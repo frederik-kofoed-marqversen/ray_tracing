@@ -109,6 +109,12 @@ impl Vec3D {
 
     #[inline]
     #[must_use]
+    pub fn is_zero(self) -> bool {
+        return self.x == 0.0 && self.y == 0.0 && self.z == 0.0;
+    }
+
+    #[inline]
+    #[must_use]
     pub fn dot(vec1: Self, vec2: Self) -> f32 {
         vec1.x * vec2.x + vec1.y * vec2.y + vec1.z * vec2.z
     }

@@ -4,6 +4,23 @@ use super::traits::{Bounded, Surface};
 use super::{Ray, Vec3D};
 
 #[derive(Debug)]
+pub struct Point {
+    pub position: Vec3D,
+}
+
+impl Point {
+    pub fn new(position: Vec3D) -> Self {
+        Self { position }
+    }
+}
+
+impl Surface for Point {
+    fn hit(&self, _ray: &Ray, _t_min: f32, _t_max: f32) -> Option<(f32, Vec3D)> {
+        None
+    }
+}
+
+#[derive(Debug)]
 pub struct Sphere {
     pub center: Vec3D,
     pub radius: f32,
