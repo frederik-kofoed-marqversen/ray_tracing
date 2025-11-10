@@ -8,12 +8,12 @@ pub mod bsdf;
 pub mod bvh;
 pub mod lights;
 use lights::Light;
+pub mod path_integrator;
 pub mod primitives;
 pub mod stl;
 pub mod subdivision_surface;
 pub mod traits;
 pub mod triangle_mesh;
-pub mod path_integrator;
 
 #[derive(Debug, Copy, Clone)]
 pub struct Ray {
@@ -83,6 +83,25 @@ impl Object {
                 return Some((world_t, world_normal));
             }
         }
+    }
+
+    #[inline]
+    pub fn hit_bool(&self, ray: &Ray, t_min: f32, t_max: f32) -> bool {
+        if self.affine_transform.is_none() {
+            return self.surface.hit_bool(&ray, t_min, t_max);
+        }
+
+        let transform = &self.affine_transform.unwrap();
+
+        let origin = transform.matrix.mul(ray.origin) + transform.translation;
+        let direction = transform.matrix.mul(ray.direction);
+        let norm_recip = direction.norm_recip();
+        let obj_ray = Ray {
+            origin,
+            direction: direction * norm_recip,
+        };
+
+        return self.surface.hit_bool(&obj_ray, t_min, t_max);
     }
 
     pub fn apply_transform(&mut self, transform: AffineTransform) {

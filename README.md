@@ -12,7 +12,7 @@ cargo run --release > image.ppm
 
 ## TODO
 
-- **Image Post Processing**: Adding low-pass filters. Maybe use Mitchell–Netravali?
+- **Image Post Processing**: Adding low-pass filters. Maybe use Mitchell–Netravali? Maybe use 2D gaussian splats method?
 
 - **Upgrade Engine**
     - **Multiple Importance Sampling**: Add direct illumination sampling using [MIS](https://pbr-book.org/3ed-2018/Monte_Carlo_Integration/Importance_Sampling).
@@ -21,7 +21,6 @@ cargo run --release > image.ppm
 
 - **Additional Scene Features**
     - **Additional Material Properties**: Such as [Frenel reflectance](https://pbr-book.org/3ed-2018/Reflection_Models/Fresnel_Incidence_Effects) for non-dielectrics and also some [Microfacet models](https://pbr-book.org/3ed-2018/Reflection_Models/Microfacet_Models).
-    - **Additional Lighting**: Add more light source types such as point, parallel, cone, area etc.
 
 - **Additional Procedural Features**
     - **Mesh Topology Fixes**: Fix the mesh topology fixing algorithm to also allow non-connected surfaces.
@@ -30,6 +29,7 @@ cargo run --release > image.ppm
     - **Subdivision Surface Enhancements**: Incorporate internal crease and corner logic into the subdivision surface algorithm.
 
 - **Accelerators**
+    - **fn hit_bool**: Implement hit function which returns if a hit is present to use for shadow ray casting. This can return at first hit and does not have to continue to find the closets.
     - **GPU**: Self explanatory
     - **General BVH**: Make BVH take a Vec of impl Bounded+Surface objects instead of only Triangle.
 

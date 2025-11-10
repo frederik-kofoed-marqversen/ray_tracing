@@ -34,6 +34,9 @@ pub trait BSDF {
     fn eval(&self, dir_in: Vec3D, dir_out: Vec3D) -> Vec3D;
     fn pdf(&self, dir_in: Vec3D, dir_out: Vec3D) -> f32;
     fn sample(&self, dir_out: Vec3D, rng: &mut Rng) -> BSDFSample;
+    fn is_specular(&self) -> bool {
+        false
+    }
 }
 
 pub struct Diffuse {
@@ -59,7 +62,7 @@ impl BSDF for Diffuse {
     }
 
     fn sample(&self, dir_out: Vec3D, rng: &mut Rng) -> BSDFSample {
-        let mut dir_in = sample_unit_sphere(rng).try_normalise().unwrap_or(Vec3D::Z);
+        let mut dir_in = (Vec3D::Z + sample_unit_sphere(rng)).try_normalise().unwrap_or(Vec3D::Z);
 
         if dir_out.z < 0.0 {
             dir_in.z = -dir_in.z;
@@ -83,6 +86,10 @@ pub struct Dielectric {
 }
 
 impl BSDF for Dielectric {
+    fn is_specular(&self) -> bool {
+        true
+    }
+
     fn eval(&self, _dir_in: Vec3D, _dir_out: Vec3D) -> Vec3D {
         assert!(self.roughness.is_none()); // currently only smooth surfaces
         Vec3D::ZERO
@@ -105,14 +112,11 @@ impl BSDF for Dielectric {
             };
         } else {
             // Specular transmission
-            let (dir_in, _eta) = refract(dir_out, self.refractive_index);
+            let (dir_in, eta) = refract(dir_out, self.refractive_index);
             let cos_in = dir_in.z.abs();
             let transmission = 1.0 - reflectance;
             let spectrum = Vec3D::fill(transmission / cos_in);
-            // if transport_mode is radiance { // when path tracing starting from the camera
-            //     spectrum *= eta * eta;
-            // }
-            // let spectrum = spectrum * _eta * _eta;
+            let spectrum = spectrum * eta * eta; // only when path tracing is starting from the camera
             return BSDFSample {
                 spectrum,
                 pdf: transmission,
@@ -134,6 +138,10 @@ pub struct Conductor {
 }
 
 impl BSDF for Conductor {
+    fn is_specular(&self) -> bool {
+        true
+    }
+    
     fn eval(&self, _dir_in: Vec3D, _dir_out: Vec3D) -> Vec3D {
         assert!(self.roughness.is_none()); // currently only smooth surfaces
         Vec3D::ZERO

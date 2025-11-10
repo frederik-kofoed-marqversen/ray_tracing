@@ -285,4 +285,50 @@ impl Surface for BoundingVolumeHierarchy {
 
         return hit;
     }
+
+    // Optimised boolean version of hit for shadow rays (early exit on first hit)
+    fn hit_bool(&self, ray: &Ray, t_min: f32, t_max: f32) -> bool {
+        let mut queue: Vec<&Node> = vec![&self.nodes[0]];
+        while let Some(node) = queue.pop() {
+            if node.is_leaf() {
+                // Intersect triangles contained in node.
+                for triangle in self.get_triangles(node.index, node.num_prim) {
+                    if triangle.hit(ray, t_min, t_max).is_some() {
+                        return true;
+                    }
+                }
+                continue;
+            }
+
+            // Intersect ray with both children
+            let mut child1 = &self.nodes[node.index as usize];
+            let mut child2 = &self.nodes[node.index as usize + 1];
+            let hit1 = child1.bounding_box.hit(ray, t_min, t_max);
+            let hit2 = child2.bounding_box.hit(ray, t_min, t_max);
+
+            // Check if either child is hit and add them to the queue.
+            match (hit1, hit2) {
+                (None, None) => continue,
+                (Some(_), None) => {
+                    queue.push(child1);
+                    continue;
+                }
+                (None, Some(_)) => {
+                    queue.push(child2);
+                    continue;
+                }
+                (Some(t1), Some(t2)) => {
+                    // Both bounding boxes were hit => Add both to the queue, the closest
+                    // is added last so that it is checked first.
+                    if t1 > t2 {
+                        std::mem::swap(&mut child1, &mut child2);
+                    }
+                    queue.push(child2);
+                    queue.push(child1);
+                }
+            };
+        }
+
+        return false;
+    }
 }

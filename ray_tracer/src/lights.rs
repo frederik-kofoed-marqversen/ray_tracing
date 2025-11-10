@@ -18,7 +18,9 @@ fn safe_sqrt(v: f32) -> f32 {
 
 pub trait Light {
     fn sample(&self, ref_point: Vec3D, rng: &mut Rng) -> LightSample;
-    fn pdf(&self, ref_point: Vec3D, dir: Vec3D) -> f32;
+    fn pdf(&self, _ray: &Ray) -> f32 {
+        0.0
+    }
     fn hit(&self, _ray: &Ray, _t_min: f32, _t_max: f32) -> Option<(f32, Vec3D, Vec3D)> {
         None
     }
@@ -50,10 +52,6 @@ impl Light for PointLight {
             pdf: 1.0,
         }
     }
-
-    fn pdf(&self, _: Vec3D, _: Vec3D) -> f32 {
-        0.0
-    }
 }
 
 #[derive(Debug)]
@@ -81,10 +79,6 @@ impl Light for Spotlight {
         }
 
         return sample;
-    }
-
-    fn pdf(&self, _: Vec3D, _: Vec3D) -> f32 {
-        0.0
     }
 }
 
@@ -151,19 +145,14 @@ impl Light for AreaLight {
         };
     }
 
-    fn pdf(&self, ref_point: Vec3D, dir: Vec3D) -> f32 {
-        let ray = Ray {
-            origin: ref_point,
-            direction: dir,
-        };
-
+    fn pdf(&self, ray: &Ray) -> f32 {
         if let Some((t, normal)) = self.surface.hit(&ray, 0.0, f32::INFINITY) {
-            let d2 = (ref_point - self.surface.center).norm_squared();
+            let d2 = (ray.origin - self.surface.center).norm_squared();
             let sin_theta_max_2 = self.surface.radius * self.surface.radius / d2;
 
             if sin_theta_max_2 > 1.0 {
                 // Uniform area sampling
-                return t * t / (self.surface.area() * Vec3D::dot(dir, normal).abs());
+                return t * t / (self.surface.area() * Vec3D::dot(ray.direction, normal).abs());
             } else {
                 // Uniform solid angle sampling
                 let cos_theta_max = f32::sqrt(1.0 - sin_theta_max_2);
