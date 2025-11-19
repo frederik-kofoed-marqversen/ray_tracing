@@ -14,6 +14,7 @@ pub mod stl;
 pub mod subdivision_surface;
 pub mod traits;
 pub mod triangle_mesh;
+pub mod utils;
 
 #[derive(Debug, Copy, Clone)]
 pub struct Ray {

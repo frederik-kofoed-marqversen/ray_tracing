@@ -14,10 +14,16 @@ cargo run --release > image.ppm
 
 - **Image Post Processing**: Adding low-pass filters. Maybe use Mitchell–Netravali? Maybe use 2D gaussian splats method?
 
+- **Cleanup**
+    - **fn hit_bool**: Combine hit and hit_bool into a single function to reduce code duplication
+    - **lib.rs**: Reconsider the organisation of lib.rs, traits.rs, utils.rs, bsdf.rs...
+    - **Surface trait**: Move sampling methods from Light trait to Surface trait.
+    - **Light trait**: Remove the need of this trait, and move functionality to object/material, and simply let engine know which objects should be considered as lights by supplying a vec of references. This way lights simply become a part of the objects vector.
+
 - **Upgrade Engine**
-    - **Multiple Importance Sampling**: Add direct illumination sampling using [MIS](https://pbr-book.org/3ed-2018/Monte_Carlo_Integration/Importance_Sampling).
     - **Stratified sampling**: As a start, use a low-discrepancy sequence for jittering on each pixel.
     - **Pixel Tiles**: Rendering of pixel tiles (e.g., 4x4) instead of lines could improve temporal data locality.
+    - **BVH**: Once BVH struct is upgraded, engine should build BVH of all objects and lights in the scene before rendering.
 
 - **Additional Scene Features**
     - **Additional Material Properties**: Such as [Frenel reflectance](https://pbr-book.org/3ed-2018/Reflection_Models/Fresnel_Incidence_Effects) for non-dielectrics and also some [Microfacet models](https://pbr-book.org/3ed-2018/Reflection_Models/Microfacet_Models).
@@ -29,8 +35,7 @@ cargo run --release > image.ppm
     - **Subdivision Surface Enhancements**: Incorporate internal crease and corner logic into the subdivision surface algorithm.
 
 - **Accelerators**
-    - **fn hit_bool**: Implement hit function which returns if a hit is present to use for shadow ray casting. This can return at first hit and does not have to continue to find the closets.
     - **GPU**: Self explanatory
-    - **General BVH**: Make BVH take a Vec of impl Bounded+Surface objects instead of only Triangle.
+    - **General BVH**: Make BVH take a Vec of some general objects instead of only Triangle.
 
 - **GUI and Real Time Rendering**: Using e.g. [egui](https://docs.rs/egui) or [imgui](https://docs.rs/imgui)

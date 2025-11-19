@@ -17,11 +17,11 @@ use ray_tracer::{Object, Vec3D};
 
 const ASPECT_RATIO: f32 = 16.0 / 9.0;
 const IMAGE_WIDTH: usize = 400;
-const SAMPLES_PER_PIXEL: u32 = 16;
-const RAY_DEPTH: u32 = 6;
+const SAMPLES_PER_PIXEL: u32 = 64;
+const RAY_DEPTH: u32 = 8;
 
 fn main() -> std::io::Result<()> {
-    let (scene, lights, camera) = scene_teapot();
+    let (scene, lights, camera) = scene_baby_yoda();
     // Render image
     let eng = ray_tracer::path_integrator::Engine::new(scene, lights, camera);
     return eng.render(ASPECT_RATIO, IMAGE_WIDTH, SAMPLES_PER_PIXEL, RAY_DEPTH);
@@ -108,13 +108,13 @@ fn scene_tetrahedra() -> (Vec<Object>, Vec<Rc<dyn Light>>, Camera) {
 fn scene_teapot() -> (Vec<Object>, Vec<Rc<dyn Light>>, Camera) {
     let teapot = ray_tracer::stl::read_stl("./meshes/utah_teapot.stl").unwrap();
     let teapot = sds::loop_subdivide(&teapot, 1);
-    let teapot_material = Rc::new(Dielectric {
-        refractive_index: 1.5,
-        roughness: None,
-    });
-    // let teapot_material = Rc::new(Diffuse {
-    //     reflectance: Vec3D::new(0.9, 0.3, 0.3),
+    // let teapot_material = Rc::new(Dielectric {
+    //     refractive_index: 1.5,
+    //     roughness: None,
     // });
+    let teapot_material = Rc::new(Diffuse {
+        reflectance: Vec3D::new(0.9, 0.3, 0.3),
+    });
 
     // Ground to cast shadows onto
     let ground = teapot
@@ -160,11 +160,13 @@ fn scene_baby_yoda() -> (Vec<Object>, Vec<Rc<dyn Light>>, Camera) {
     // Unfortunately the .stl file is not good and does not define a manifold
     // mesh.try_fix_mesh();
     // let grogu = loop_subdivide(&grogu, 1);
-    // let grogu_material = Material::diffuse(Vec3D::fill(0.1));
-    let grogu_material = Rc::new(Dielectric {
-        refractive_index: 1.5,
-        roughness: None,
+    let grogu_material = Rc::new(Diffuse {
+        reflectance: Vec3D::new(0.6, 0.6, 0.6),
     });
+    // let grogu_material = Rc::new(Dielectric {
+    //     refractive_index: 1.5,
+    //     roughness: None,
+    // });
 
     // Ground to cast shadows onto
     let ground = grogu
@@ -204,7 +206,7 @@ fn scene_baby_yoda() -> (Vec<Object>, Vec<Rc<dyn Light>>, Camera) {
             center: centre + 2000.0 * up + 2000.0 * left - 1000.0 * away,
             radius: 1000.0,
         },
-        emmited_radiance: Vec3D::ONES * 10.0,
+        emmited_radiance: Vec3D::ONES * 5.0,
     });
 
     // A floating ball

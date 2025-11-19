@@ -7,32 +7,21 @@ use std::io::Write;
 use std::rc::Rc;
 
 #[inline]
-pub fn clamp(val: f32, min: f32, max: f32) -> f32 {
-    if val < min {
-        return min;
-    }
-    if val > max {
-        return max;
-    }
-    return val;
-}
-
-#[inline]
 fn write_pixel(lock: &mut io::StdoutLock, pixel_colour: Vec3D) -> io::Result<()> {
     writeln!(
         lock,
         "{} {} {}",
-        (256.0 * clamp(pixel_colour.x.sqrt(), 0.0, 0.999)) as u8,
-        (256.0 * clamp(pixel_colour.y.sqrt(), 0.0, 0.999)) as u8,
-        (256.0 * clamp(pixel_colour.z.sqrt(), 0.0, 0.999)) as u8,
+        (256.0 * pixel_colour.x.sqrt().clamp(0.0, 0.999)) as u8,
+        (256.0 * pixel_colour.y.sqrt().clamp(0.0, 0.999)) as u8,
+        (256.0 * pixel_colour.z.sqrt().clamp(0.0, 0.999)) as u8,
     )
 }
 
 #[inline]
-fn mis_weight(power: f32, pa: f32, pb: f32) -> f32 {
+fn mis_weight(power: i32, pa: f32, pb: f32) -> f32 {
     // power heuristic
-    let a = pa.powf(power);
-    let b = pb.powf(power);
+    let a = pa.powi(power);
+    let b = pb.powi(power);
     if a + b == 0.0 {
         0.0
     } else {
@@ -112,7 +101,7 @@ impl Engine {
         const T_MAX: f32 = f32::INFINITY;
 
         let mut beta = Vec3D::ONES; // path throughput
-        let mut L = Vec3D::ZERO; // accumulated radiance
+        let mut radiance = Vec3D::ZERO; // accumulated radiance
 
         // `prev_pdf` stores the pdf of the sampling method that produced `ray`
         // (when the current ray was generated). For the camera primary ray we
@@ -120,7 +109,6 @@ impl Engine {
         let mut prev_pdf: f32 = 1.0;
         let mut prev_specular = true;
 
-        // while depth > 0 {
         while depth > 0 {
             depth -= 1;
 
@@ -131,11 +119,11 @@ impl Engine {
             // Intersect with lights and add contribution
             if let Some((_, emitted, light)) = self.hit_light(&ray, T_MIN, t_hit) {
                 if prev_specular {
-                    L += Vec3D::mul_elemwise(beta, emitted);
+                    radiance += Vec3D::mul_elemwise(beta, emitted);
                 } else {
                     let p_light = self.lights_pdf(light) * light.pdf(&ray);
-                    let w = mis_weight(2.0, prev_pdf, p_light);
-                    L += w * Vec3D::mul_elemwise(beta, emitted);
+                    let w = mis_weight(2, prev_pdf, p_light);
+                    radiance += w * Vec3D::mul_elemwise(beta, emitted);
                 }
                 break; // light terminates path (assumed black body with no reflection)
             }
@@ -174,9 +162,9 @@ impl Engine {
                     // pdf of sampling the same direction via BSDF sampling
                     let p_bsdf = object.material.pdf(wi_local, wo_local);
 
-                    let w = mis_weight(2.0, p_light, p_bsdf);
+                    let w = mis_weight(2, p_light, p_bsdf);
                     if p_light > 0.0 {
-                        L += w * Vec3D::mul_elemwise(beta, contribution) / p_light;
+                        radiance += w * Vec3D::mul_elemwise(beta, contribution) / p_light;
                     }
                 }
             }
@@ -204,7 +192,7 @@ impl Engine {
             beta /= 1.0 - q;
         }
 
-        return L;
+        return radiance;
     }
 
     pub fn render(
@@ -223,9 +211,11 @@ impl Engine {
         let mut err_lock = stderr.lock();
 
         write!(lock, "P3\n{image_width} {image_height}\n255\n")?;
+        let progress_interval = image_height / 10;
         for j in (0..image_height).rev() {
-            if j % 10 == 0 {
-                writeln!(err_lock, "Scanlines remaining: {j}")?;
+            if j % progress_interval == 0 {
+                let progress = 100 - (j * 100) / image_height;
+                writeln!(err_lock, "Progress: {progress}%")?;
             }
             for i in 0..image_width {
                 let mut colour = Vec3D::ZERO;
@@ -234,6 +224,9 @@ impl Engine {
                     let v = (j as f32 + rng.f32()) / (image_height - 1) as f32;
                     let ray = self.camera.ray(u, v);
                     colour += self.ray_colour(ray, ray_depth, &mut rng);
+                }
+                if colour.x.is_nan() || colour.y.is_nan() || colour.z.is_nan() {
+                    colour = Vec3D::new(255.0, 255.0, 0.0);
                 }
                 write_pixel(&mut lock, colour / samples_per_pixel as f32)?;
             }

@@ -6,15 +6,7 @@ use super::primitives::Sphere;
 use super::traits::Surface;
 use super::vec3d::utils::{sample_unit_sphere, tangent_space};
 use super::{Ray, Vec3D};
-
-#[inline]
-fn safe_sqrt(v: f32) -> f32 {
-    if v <= 0.0 {
-        0.0
-    } else {
-        v.sqrt()
-    }
-}
+use super::utils::safe_sqrt;
 
 pub trait Light {
     fn sample(&self, ref_point: Vec3D, rng: &mut Rng) -> LightSample;

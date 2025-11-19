@@ -1,3 +1,4 @@
+use super::utils::safe_sqrt;
 use core::ops::*;
 
 #[derive(Debug, Clone, Copy)]
@@ -28,17 +29,8 @@ impl Complex {
 
     pub fn sqrt(z: Self) -> Self {
         let r = z.norm();
-
-        if r == 0.0 {
-            return Complex {
-                real: 0.0,
-                imag: 0.0,
-            };
-        }
-
-        let a = f32::sqrt((r + z.real) / 2.0);
-        let b = z.imag / a / 2.0;
-
+        let a = safe_sqrt((r + z.real) / 2.0);
+        let b = safe_sqrt((r - z.real) / 2.0) * z.imag.signum();
         return Complex { real: a, imag: b };
     }
 
