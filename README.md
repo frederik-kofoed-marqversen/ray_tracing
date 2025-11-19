@@ -24,6 +24,7 @@ cargo run --release > image.ppm
     - **Stratified sampling**: As a start, use a low-discrepancy sequence for jittering on each pixel.
     - **Pixel Tiles**: Rendering of pixel tiles (e.g., 4x4) instead of lines could improve temporal data locality.
     - **BVH**: Once BVH struct is upgraded, engine should build BVH of all objects and lights in the scene before rendering.
+    - **Light propagation**: Include history of refraction indices somehow plus include exponential absorbtion of light through dielectric.
 
 - **Additional Scene Features**
     - **Additional Material Properties**: Such as [Frenel reflectance](https://pbr-book.org/3ed-2018/Reflection_Models/Fresnel_Incidence_Effects) for non-dielectrics and also some [Microfacet models](https://pbr-book.org/3ed-2018/Reflection_Models/Microfacet_Models).
