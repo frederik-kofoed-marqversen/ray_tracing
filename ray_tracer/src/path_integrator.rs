@@ -100,8 +100,9 @@ impl Engine {
         const T_MIN: f32 = 0.001;
         const T_MAX: f32 = f32::INFINITY;
 
-        let mut beta = Vec3D::ONES; // path throughput
         let mut radiance = Vec3D::ZERO; // accumulated radiance
+        let mut beta = Vec3D::ONES; // path throughput
+        // let mut eta_scaling = 1.0;  // scaling factor for refractive index changes along the path
 
         // `prev_pdf` stores the pdf of the sampling method that produced `ray`
         // (when the current ray was generated). For the camera primary ray we
@@ -175,6 +176,7 @@ impl Engine {
 
             // Update throughput and prepare next ray
             beta = Vec3D::mul_elemwise(beta, bsdf_val_cos) / bsdf_sample.pdf;
+            // eta_scaling /= bsdf_sample.eta_rel_it().powi(2); // only upon transmission
             prev_pdf = bsdf_sample.pdf;
             prev_specular = object.material.is_specular();
 
@@ -184,7 +186,9 @@ impl Engine {
             };
 
             // Russian roulette for path termination
-            let q = (1.0 - beta.max_elem()).max(0.0); // probability to terminate
+            let q = 1.0 - beta.max_elem(); // termination probability (removed redundant .max(0.0))
+            // let eta_corrected_beta = beta * eta_scaling;
+            // let q = 1.0 - eta_corrected_beta.max_elem();
             if rng.f32() < q {
                 // terminate path
                 break;

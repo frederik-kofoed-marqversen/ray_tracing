@@ -1,19 +1,6 @@
 use super::primitives::AxisAlignedBoundingBox as AABB;
 use super::traits::{Bounded, Surface};
-use super::triangle_mesh::Triangle;
 use super::{Ray, Vec3D};
-
-impl Triangle {
-    #[inline]
-    fn centroid_axis(&self, axis: usize) -> f32 {
-        self.vertices().iter().map(|p| p[axis]).sum::<f32>() / 3.0
-    }
-
-    #[inline]
-    fn centroid(&self) -> Vec3D {
-        self.vertices().iter().sum::<Vec3D>() / 3.0
-    }
-}
 
 /// Nodes have a bounding box, a counter for the number of primitives it contains,
 /// and an index. If `num_prim == 0` then the Node is not a leaf node and `index` is
@@ -37,25 +24,48 @@ impl Node {
 }
 
 /// Bounding Volume Hierarchy contains a reference to a Vec of primitives (for now
-/// only triangles), and a Vec of nodes. The `indices` is a list of indices into
-/// `triangles` such that if a node points to some `index`, then the corresponding
-/// triangle is `triangles[indices[index]]`.
-pub struct BoundingVolumeHierarchy {
-    triangles: Vec<Triangle>,
+/// only primitives), and a Vec of nodes. The `indices` is a list of indices into
+/// `primitives` such that if a node points to some `index`, then the corresponding
+/// primitive is `primitives[indices[index]]`.
+#[derive(Debug)]
+pub struct BoundingVolumeHierarchy<T: Bounded + Surface> {
+    primitives: Vec<T>,
     indices: Vec<usize>,
     nodes: Vec<Node>,
 }
 
-impl BoundingVolumeHierarchy {
-    pub fn build(triangles: Vec<Triangle>) -> Self {
+impl<T: Bounded + Surface> Bounded for BoundingVolumeHierarchy<T> {
+    fn bounding_box(&self) -> AABB {
+        self.nodes[0].bounding_box.clone()
+    }
+}
+
+impl<T: Bounded + Surface> Surface for BoundingVolumeHierarchy<T> {
+    fn hit(&self, ray: &Ray, t_min: f32, t_max: f32) -> Option<(f32, Vec3D)> {
+        self.traverse_bvh(ray, t_min, t_max, TraverseMode::Nearest)
+    }
+
+    fn hit_bool(&self, ray: &Ray, t_min: f32, t_max: f32) -> bool {
+        self.traverse_bvh(ray, t_min, t_max, TraverseMode::Any)
+            .is_some()
+    }
+}
+
+enum TraverseMode {
+    Nearest,
+    Any,
+}
+
+impl<T: Bounded + Surface> BoundingVolumeHierarchy<T> {
+    pub fn build(primitives: Vec<T>) -> Self {
         // Initialise BVH.
         // The number of nodes is upper bounded by 2n-1 since the maximal number of
         // leafs is n, and for each layer of m nodes, there are a maximum of 2m
         // children. Thus, the maximum number of nodes is 1 + 2 +... + n = 2n-1.
-        let n = triangles.len();
+        let n = primitives.len();
         assert!(2 * n - 1 < u32::MAX as usize);
         let mut bvh = Self {
-            triangles,
+            primitives: primitives,
             indices: (0..n).collect(),
             nodes: Vec::with_capacity(2 * n - 1),
         };
@@ -71,15 +81,15 @@ impl BoundingVolumeHierarchy {
     }
 
     #[inline]
-    fn get_triangles(&self, first_prim: u32, num_prim: u32) -> impl Iterator<Item = &Triangle> {
-        (first_prim..first_prim + num_prim).map(|i| &self.triangles[self.indices[i as usize]])
+    fn get_primitives(&self, first_prim: u32, num_prim: u32) -> impl Iterator<Item = &T> {
+        (first_prim..first_prim + num_prim).map(|i| &self.primitives[self.indices[i as usize]])
     }
 
     #[inline]
     fn new_node(&self, first_prim: u32, num_prim: u32) -> Node {
         let bounding_box = self
-            .get_triangles(first_prim, num_prim)
-            .map(|tri| tri.bounding_box())
+            .get_primitives(first_prim, num_prim)
+            .map(|pri| pri.bounding_box())
             .fold(AABB::empty(), |a, b| AABB::combine(&a, &b));
 
         return Node {
@@ -144,8 +154,8 @@ impl BoundingVolumeHierarchy {
 
         // Construct centroid bounding box
         let centroid_aabb = self
-            .get_triangles(first_prim, num_prim)
-            .fold(AABB::empty(), |res, tri| res.grow(tri.centroid()));
+            .get_primitives(first_prim, num_prim)
+            .fold(AABB::empty(), |res, pri| res.grow(pri.centroid()));
 
         // Determine optimal partition plane for each axis using binned Surface Area Heuristic
         let mut axis = 0;
@@ -159,13 +169,13 @@ impl BoundingVolumeHierarchy {
             }
             let scale = BINS as f32 / (max - min);
 
-            // Build bins: (AABB, tri_count)
+            // Build bins: (AABB, primitive_count)
             let mut bins = vec![(AABB::empty(), 0); BINS];
-            for triangle in self.get_triangles(first_prim, num_prim) {
-                let bin_index = ((triangle.centroid_axis(plane_axis) - min) * scale) as usize;
+            for primitive in self.get_primitives(first_prim, num_prim) {
+                let bin_index = ((primitive.centroid_axis(plane_axis) - min) * scale) as usize;
                 let bin_index = bin_index.min(BINS - 1);
                 let bin = &mut bins[bin_index];
-                bin.0 = AABB::combine(&bin.0, &triangle.bounding_box());
+                bin.0 = AABB::combine(&bin.0, &primitive.bounding_box());
                 bin.1 += 1;
             }
 
@@ -215,11 +225,11 @@ impl BoundingVolumeHierarchy {
         axis: usize,
         split_point: f32,
     ) -> u32 {
-        // Move triangles contained in this node to match the partitioning
+        // Move primitives contained in this node to match the partitioning
         let mut i = first_prim;
         let mut j = first_prim + num_prim - 1;
         while i <= j {
-            if self.triangles[self.indices[i as usize]].centroid_axis(axis) < split_point {
+            if self.primitives[self.indices[i as usize]].centroid_axis(axis) < split_point {
                 i += 1;
             } else {
                 self.indices.swap(i as usize, j as usize);
@@ -229,26 +239,29 @@ impl BoundingVolumeHierarchy {
         // Return the partition point (beginning of second partition)
         return i;
     }
-}
 
-impl Bounded for BoundingVolumeHierarchy {
-    fn bounding_box(&self) -> AABB {
-        self.nodes[0].bounding_box.clone()
-    }
-}
-
-impl Surface for BoundingVolumeHierarchy {
-    fn hit(&self, ray: &Ray, t_min: f32, mut t_max: f32) -> Option<(f32, Vec3D)> {
+    fn traverse_bvh(
+        &self,
+        ray: &Ray,
+        t_min: f32,
+        mut t_max: f32,
+        mode: TraverseMode,
+    ) -> Option<(f32, Vec3D)> {
         let mut hit = None;
 
         let mut queue: Vec<&Node> = vec![&self.nodes[0]];
         while let Some(node) = queue.pop() {
             if node.is_leaf() {
-                // Intersect triangles contained in node.
-                for triangle in self.get_triangles(node.index, node.num_prim) {
-                    if let Some(new_hit) = triangle.hit(ray, t_min, t_max) {
-                        t_max = new_hit.0;
-                        hit = Some(new_hit);
+                // Intersect primitives contained in node.
+                for primitive in self.get_primitives(node.index, node.num_prim) {
+                    if let Some(new_hit) = primitive.hit(ray, t_min, t_max) {
+                        match mode {
+                            TraverseMode::Any => return Some(new_hit),
+                            TraverseMode::Nearest => {
+                                t_max = new_hit.0;
+                                hit = Some(new_hit);
+                            }
+                        }
                     }
                 }
                 continue;
@@ -284,51 +297,5 @@ impl Surface for BoundingVolumeHierarchy {
         }
 
         return hit;
-    }
-
-    // Optimised boolean version of hit for shadow rays (early exit on first hit)
-    fn hit_bool(&self, ray: &Ray, t_min: f32, t_max: f32) -> bool {
-        let mut queue: Vec<&Node> = vec![&self.nodes[0]];
-        while let Some(node) = queue.pop() {
-            if node.is_leaf() {
-                // Intersect triangles contained in node.
-                for triangle in self.get_triangles(node.index, node.num_prim) {
-                    if triangle.hit(ray, t_min, t_max).is_some() {
-                        return true;
-                    }
-                }
-                continue;
-            }
-
-            // Intersect ray with both children
-            let mut child1 = &self.nodes[node.index as usize];
-            let mut child2 = &self.nodes[node.index as usize + 1];
-            let hit1 = child1.bounding_box.hit(ray, t_min, t_max);
-            let hit2 = child2.bounding_box.hit(ray, t_min, t_max);
-
-            // Check if either child is hit and add them to the queue.
-            match (hit1, hit2) {
-                (None, None) => continue,
-                (Some(_), None) => {
-                    queue.push(child1);
-                    continue;
-                }
-                (None, Some(_)) => {
-                    queue.push(child2);
-                    continue;
-                }
-                (Some(t1), Some(t2)) => {
-                    // Both bounding boxes were hit => Add both to the queue, the closest
-                    // is added last so that it is checked first.
-                    if t1 > t2 {
-                        std::mem::swap(&mut child1, &mut child2);
-                    }
-                    queue.push(child2);
-                    queue.push(child1);
-                }
-            };
-        }
-
-        return false;
     }
 }

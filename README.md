@@ -15,6 +15,7 @@ cargo run --release > image.ppm
 - **Image Post Processing**: Adding low-pass filters. Maybe use Mitchell–Netravali? Maybe use 2D gaussian splats method?
 
 - **Cleanup**
+    - **More unit tests**: Add more unit tests for e.g. bsdf.rs, lights.rs, 
     - **fn hit_bool**: Combine hit and hit_bool into a single function to reduce code duplication
     - **lib.rs**: Reconsider the organisation of lib.rs, traits.rs, utils.rs, bsdf.rs...
     - **Surface trait**: Move sampling methods from Light trait to Surface trait.
@@ -25,9 +26,11 @@ cargo run --release > image.ppm
     - **Pixel Tiles**: Rendering of pixel tiles (e.g., 4x4) instead of lines could improve temporal data locality.
     - **BVH**: Once BVH struct is upgraded, engine should build BVH of all objects and lights in the scene before rendering.
     - **Light propagation**: Include history of refraction indices somehow plus include exponential absorbtion of light through dielectric.
-
-- **Additional Scene Features**
+    - **Light units**: Figure out proper physical units for light emission.
+    - **Eta correction**: Use eta corrected beta value for Russian rulette.
+    - **Area lights**: Add more types of area lights e.g. Triangle, BVH
     - **Additional Material Properties**: Such as [Frenel reflectance](https://pbr-book.org/3ed-2018/Reflection_Models/Fresnel_Incidence_Effects) for non-dielectrics and also some [Microfacet models](https://pbr-book.org/3ed-2018/Reflection_Models/Microfacet_Models).
+    - **Depth of field**: Include depth of field to camera struct
 
 - **Additional Procedural Features**
     - **Mesh Topology Fixes**: Fix the mesh topology fixing algorithm to also allow non-connected surfaces.

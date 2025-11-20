@@ -76,6 +76,107 @@ impl Bounded for Sphere {
         let lower = self.center - v;
         return AxisAlignedBoundingBox { upper, lower };
     }
+
+    fn centroid(&self) -> Vec3D {
+        self.center
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Triangle {
+    pub v0: Vec3D,
+    pub v1: Vec3D,
+    pub v2: Vec3D,
+}
+
+impl Triangle {
+    pub fn new(v0: Vec3D, v1: Vec3D, v2: Vec3D) -> Self {
+        Self { v0, v1, v2 }
+    }
+
+    #[inline]
+    pub fn area_weighted_normal(&self) -> Vec3D {
+        let e1 = self.v1 - self.v0;
+        let e2 = self.v2 - self.v0;
+        0.5 * Vec3D::cross(e1, e2)
+    }
+
+    #[inline]
+    pub fn area(&self) -> f32 {
+        self.area_weighted_normal().norm()
+    }
+}
+
+#[inline]
+pub fn triangle_intersection(
+    v0: Vec3D,
+    v1: Vec3D,
+    v2: Vec3D,
+    ray: &Ray,
+    t_min: f32,
+    t_max: f32,
+) -> Option<(f32, Vec3D)> {
+    // Möller-Trumbore intersection algorithm. More or less copied from Wikipedia
+    let e1 = v1 - v0;
+    let e2 = v2 - v0;
+
+    let ray_cross_e2 = Vec3D::cross(ray.direction, e2);
+    let det = Vec3D::dot(e1, ray_cross_e2);
+
+    if det.abs() < f32::EPSILON {
+        return None; // Ray is parallel to triangle.
+    }
+
+    let inv_det = 1.0 / det;
+    let s = ray.origin - v0;
+    let u = inv_det * Vec3D::dot(s, ray_cross_e2);
+    if u < 0.0 || u > 1.0 {
+        // Ray misses triangle in u-dir
+        return None;
+    }
+
+    let s_cross_e1 = Vec3D::cross(s, e1);
+    let v = inv_det * Vec3D::dot(ray.direction, s_cross_e1);
+    if v < 0.0 || u + v > 1.0 {
+        // Ray misses triangle in v-dir
+        return None;
+    }
+
+    let t = inv_det * Vec3D::dot(e2, s_cross_e1);
+    if t > t_min && t < t_max {
+        // Hit!
+        let normal = Vec3D::cross(e1, e2).normalise();
+        return Some((t, normal));
+    } else {
+        // Ray hits outside of given interval
+        return None;
+    }
+}
+
+impl Surface for Triangle {
+    fn hit(&self, ray: &Ray, t_min: f32, t_max: f32) -> Option<(f32, Vec3D)> {
+        triangle_intersection(self.v0, self.v1, self.v2, ray, t_min, t_max)
+    }
+}
+
+impl Bounded for Triangle {
+    #[inline]
+    fn bounding_box(&self) -> AxisAlignedBoundingBox {
+        AxisAlignedBoundingBox::empty()
+            .grow(self.v0)
+            .grow(self.v1)
+            .grow(self.v2)
+    }
+
+    #[inline]
+    fn centroid_axis(&self, axis: usize) -> f32 {
+        (self.v0[axis] + self.v1[axis] + self.v2[axis]) / 3.0
+    }
+
+    #[inline]
+    fn centroid(&self) -> Vec3D {
+        (self.v0 + self.v1 + self.v2) / 3.0
+    }
 }
 
 #[derive(Debug)]

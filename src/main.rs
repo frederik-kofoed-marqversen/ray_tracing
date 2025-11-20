@@ -4,13 +4,10 @@ use std::rc::Rc;
 extern crate ray_tracer;
 
 use ray_tracer::bsdf::*;
-use ray_tracer::bvh::BoundingVolumeHierarchy as BVH;
-use ray_tracer::lights::AreaLight;
-use ray_tracer::lights::Light;
-use ray_tracer::lights::PointLight;
+use ray_tracer::lights::*;
 use ray_tracer::primitives::*;
 use ray_tracer::subdivision_surface as sds;
-use ray_tracer::triangle_mesh::{Triangle, TriangleMesh};
+use ray_tracer::triangle_mesh::TriangleMesh;
 use ray_tracer::AffineTransform as Affine;
 use ray_tracer::Camera;
 use ray_tracer::{Object, Vec3D};
@@ -92,10 +89,10 @@ fn scene_tetrahedra() -> (Vec<Object>, Vec<Rc<dyn Light>>, Camera) {
     // Add tetrahedron objects to scene
     for (i, sds) in tetrahedra.iter().enumerate() {
         let transform = Affine::translate(i as f32 * separation);
-        let mesh = sds.to_triangle_mesh();
-        let bvh = BVH::build(mesh.to_triangles().1);
+        let mesh = Rc::new(sds.to_triangle_mesh());
+        let bvh = TriangleMesh::build_bvh(&mesh);
         scene.push(Object::new(
-            Rc::new(bvh),
+            bvh,
             tetrahedron_material.clone(),
             Some(transform),
         ));
@@ -107,7 +104,7 @@ fn scene_tetrahedra() -> (Vec<Object>, Vec<Rc<dyn Light>>, Camera) {
 #[allow(dead_code)]
 fn scene_teapot() -> (Vec<Object>, Vec<Rc<dyn Light>>, Camera) {
     let teapot = ray_tracer::stl::read_stl("./meshes/utah_teapot.stl").unwrap();
-    let teapot = sds::loop_subdivide(&teapot, 1);
+    let teapot = Rc::new(sds::loop_subdivide(&teapot, 1));
     // let teapot_material = Rc::new(Dielectric {
     //     refractive_index: 1.5,
     //     roughness: None,
@@ -144,9 +141,8 @@ fn scene_teapot() -> (Vec<Object>, Vec<Rc<dyn Light>>, Camera) {
     });
 
     // Prepare scene for rendering
-    let (_, triangles) = teapot.to_triangles();
-    let bvh = BVH::build(triangles);
-    let teapot = Object::new(Rc::new(bvh), teapot_material, None);
+    let bvh = TriangleMesh::build_bvh(&teapot);
+    let teapot = Object::new(bvh, teapot_material, None);
     let scene = vec![teapot, ground];
     let lights = vec![light];
 
@@ -156,17 +152,17 @@ fn scene_teapot() -> (Vec<Object>, Vec<Rc<dyn Light>>, Camera) {
 #[allow(dead_code)]
 fn scene_baby_yoda() -> (Vec<Object>, Vec<Rc<dyn Light>>, Camera) {
     // Baby Yoda (Grogu)
-    let grogu = ray_tracer::stl::read_stl("./meshes/baby_yoda.stl").unwrap();
+    let grogu = Rc::new(ray_tracer::stl::read_stl("./meshes/baby_yoda.stl").unwrap());
     // Unfortunately the .stl file is not good and does not define a manifold
     // mesh.try_fix_mesh();
     // let grogu = loop_subdivide(&grogu, 1);
-    let grogu_material = Rc::new(Diffuse {
-        reflectance: Vec3D::new(0.6, 0.6, 0.6),
-    });
-    // let grogu_material = Rc::new(Dielectric {
-    //     refractive_index: 1.5,
-    //     roughness: None,
+    // let grogu_material = Rc::new(Diffuse {
+    //     reflectance: Vec3D::new(0.6, 0.6, 0.6),
     // });
+    let grogu_material = Rc::new(Dielectric {
+        refractive_index: 1.5,
+        roughness: None,
+    });
 
     // Ground to cast shadows onto
     let ground = grogu
@@ -219,9 +215,8 @@ fn scene_baby_yoda() -> (Vec<Object>, Vec<Rc<dyn Light>>, Camera) {
     );
 
     // Prepare scene for rendering
-    let (_, triangles) = grogu.to_triangles();
-    let bvh = BVH::build(triangles);
-    let grogu = Object::new(Rc::new(bvh), grogu_material, None);
+    let bvh = TriangleMesh::build_bvh(&grogu);
+    let grogu = Object::new(bvh, grogu_material, None);
     let scene = vec![grogu, ground, ball];
     let lights = vec![light];
 
@@ -259,7 +254,7 @@ fn scene_primitives() -> (Vec<Object>, Vec<Rc<dyn Light>>, Camera) {
         None,
     ));
     scene.push(Object::new(
-        Rc::new(Triangle::new_lonely(
+        Rc::new(Triangle::new(
             Vec3D::new(-4.5, 2.0, 0.2),
             Vec3D::new(-2.0, 3.0, 0.2),
             Vec3D::new(-3.0, 2.5, 3.2),

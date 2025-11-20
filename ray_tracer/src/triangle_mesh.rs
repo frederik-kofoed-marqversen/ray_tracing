@@ -1,120 +1,82 @@
 use std::collections::{HashMap, VecDeque};
 
-use super::primitives::AxisAlignedBoundingBox;
+use super::bvh::BoundingVolumeHierarchy as BVH;
+use super::primitives::{triangle_intersection, AxisAlignedBoundingBox};
 use super::traits::{Bounded, Surface};
 use super::AffineTransform;
 use super::{Ray, Vec3D};
 use std::rc::Rc;
 
 /// TriangleMesh is defined by a array of vertices. Each triangle is defined by three indices into
-/// that array, one for each corner of the triangle. TriangleMesh does not implement Surface, and
-/// so is basically just a datastructure used to hold triangle data.
+/// that array, one for each corner of the triangle.
+/// TriangleMesh itself does not implement Surface or Bounded. Instead, a BVH over the mesh can be
+/// built using TriangleRef primitives, which reference individual triangles within the mesh.
 #[derive(Debug, Clone)]
 pub struct TriangleMesh {
     pub vertices: Vec<Vec3D>,
     pub triangles: Vec<[usize; 3]>,
 }
 
-/// Triangle's do not live by themselves, but refer to a TriangleMesh and themselves only store
-/// their corresponding index into that TriangleMesh's triangle array.
-pub struct Triangle {
+/// TriangleRef is a reference to a single triangle within a TriangleMesh.
+/// It implements Surface and Bounded by looking up the relevant data from the mesh.
+#[derive(Debug, Clone)]
+pub struct TriangleRef {
     mesh: Rc<TriangleMesh>,
     index: usize,
 }
 
-impl Triangle {
-    pub fn new_lonely(p1: Vec3D, p2: Vec3D, p3: Vec3D) -> Self {
-        let mesh = TriangleMesh {
-            vertices: vec![p1, p2, p3],
-            triangles: vec![[0, 1, 2]],
-        };
-        let (_, mut triangles) = mesh.to_triangles();
-        return triangles.pop().unwrap();
-    }
-
-    #[inline]
-    pub fn vertices(&self) -> [Vec3D; 3] {
-        let indices = self.mesh.triangles[self.index];
-        indices.map(|index| self.mesh.vertices[index])
-    }
-
-    #[inline]
-    pub fn area_weighted_normal(&self) -> Vec3D {
-        area_weighted_normal(self.vertices())
-    }
-
-    #[inline]
-    pub fn area(&self) -> f32 {
-        self.area_weighted_normal().norm()
-    }
-}
-
-impl Surface for Triangle {
+impl Surface for TriangleRef {
     fn hit(&self, ray: &Ray, t_min: f32, t_max: f32) -> Option<(f32, Vec3D)> {
-        // Möller-Trumbore intersection algorithm. More or less copied from Wikipedia
-        let vertices = self.vertices();
-        let e1 = vertices[1] - vertices[0];
-        let e2 = vertices[2] - vertices[0];
+        let tri = self.mesh.triangles[self.index];
+        let v0 = self.mesh.vertices[tri[0]];
+        let v1 = self.mesh.vertices[tri[1]];
+        let v2 = self.mesh.vertices[tri[2]];
 
-        let ray_cross_e2 = Vec3D::cross(ray.direction, e2);
-        let det = Vec3D::dot(e1, ray_cross_e2);
-
-        if det.abs() < f32::EPSILON {
-            return None; // Ray is parallel to triangle.
-        }
-
-        let inv_det = 1.0 / det;
-        let s = ray.origin - vertices[0];
-        let u = inv_det * Vec3D::dot(s, ray_cross_e2);
-        if u < 0.0 || u > 1.0 {
-            // Ray misses triangle in u-dir
-            return None;
-        }
-
-        let s_cross_e1 = Vec3D::cross(s, e1);
-        let v = inv_det * Vec3D::dot(ray.direction, s_cross_e1);
-        if v < 0.0 || u + v > 1.0 {
-            // Ray misses triangle in v-dir
-            return None;
-        }
-
-        let t = inv_det * Vec3D::dot(e2, s_cross_e1);
-        if t > t_min && t < t_max {
-            // Hit!
-            let normal = Vec3D::cross(e1, e2).normalise();
-            return Some((t, normal));
-        } else {
-            // Ray hits outside of given interval
-            return None;
-        }
+        triangle_intersection(v0, v1, v2, ray, t_min, t_max)
     }
 }
 
-impl Bounded for Triangle {
+impl Bounded for TriangleRef {
     #[inline]
     fn bounding_box(&self) -> AxisAlignedBoundingBox {
-        self.vertices()
-            .iter()
-            .fold(AxisAlignedBoundingBox::empty(), |res, v| res.grow(*v))
+        let tri = self.mesh.triangles[self.index];
+        AxisAlignedBoundingBox::empty()
+            .grow(self.mesh.vertices[tri[0]])
+            .grow(self.mesh.vertices[tri[1]])
+            .grow(self.mesh.vertices[tri[2]])
+    }
+
+    #[inline]
+    fn centroid_axis(&self, axis: usize) -> f32 {
+        let tri = self.mesh.triangles[self.index];
+        (self.mesh.vertices[tri[0]][axis]
+            + self.mesh.vertices[tri[1]][axis]
+            + self.mesh.vertices[tri[2]][axis])
+            / 3.0
+    }
+
+    #[inline]
+    fn centroid(&self) -> Vec3D {
+        let tri = self.mesh.triangles[self.index];
+        (self.mesh.vertices[tri[0]] + self.mesh.vertices[tri[1]] + self.mesh.vertices[tri[2]]) / 3.0
     }
 }
 
 impl TriangleMesh {
-    pub fn to_triangles(self: Self) -> (Rc<Self>, Vec<Triangle>) {
-        let pointer = Rc::new(self);
-        let triangles = (0..pointer.triangles.len())
-            .map(|index| Triangle {
-                mesh: Rc::clone(&pointer),
-                index,
-            })
-            .collect();
-        return (pointer, triangles);
-    }
-
     #[inline]
     fn get_edges(&self, triangle: usize) -> [(usize, usize); 3] {
         let vertices = &self.triangles[triangle];
         [0, 1, 2].map(|i| (vertices[i], vertices[(i + 1) % 3]))
+    }
+
+    pub fn build_bvh(mesh: &Rc<TriangleMesh>) -> Rc<BVH<TriangleRef>> {
+        let prims: Vec<TriangleRef> = (0..mesh.triangles.len())
+            .map(|i| TriangleRef {
+                mesh: Rc::clone(mesh),
+                index: i,
+            })
+            .collect();
+        Rc::new(BVH::build(prims))
     }
 
     pub fn apply_transform(&mut self, transform: AffineTransform) {
