@@ -1,11 +1,12 @@
 use std::collections::{HashMap, VecDeque};
-
-use super::bvh::BoundingVolumeHierarchy as BVH;
-use super::primitives::{triangle_intersection, AxisAlignedBoundingBox};
-use super::traits::{Bounded, Surface};
-use super::AffineTransform;
-use super::{Ray, Vec3D};
 use std::rc::Rc;
+
+use crate::bvh::BoundingVolumeHierarchy as BVH;
+use crate::geometry::primitives::{triangle_intersection, AxisAlignedBoundingBox};
+use crate::traits::*;
+use crate::AffineTransform;
+use crate::Ray;
+use crate::Vec3D;
 
 /// TriangleMesh is defined by a array of vertices. Each triangle is defined by three indices into
 /// that array, one for each corner of the triangle.

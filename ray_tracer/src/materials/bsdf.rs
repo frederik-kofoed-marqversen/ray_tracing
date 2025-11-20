@@ -1,7 +1,7 @@
-use super::complex::Complex;
-use super::utils::safe_sqrt;
-use super::vec3d::utils::{sample_unit_sphere, tangent_space};
-use super::Vec3D;
+use crate::math::safe_sqrt;
+use crate::math::vec3d::utils::{sample_unit_sphere, tangent_space};
+use crate::math::Complex;
+use crate::Vec3D;
 use fastrand::Rng;
 use std::f32::consts::PI;
 

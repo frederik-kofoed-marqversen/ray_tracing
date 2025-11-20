@@ -2,15 +2,10 @@ use std::f32::consts::PI;
 use std::rc::Rc;
 
 extern crate ray_tracer;
-
-use ray_tracer::bsdf::*;
-use ray_tracer::lights::*;
-use ray_tracer::primitives::*;
-use ray_tracer::subdivision_surface as sds;
-use ray_tracer::triangle_mesh::TriangleMesh;
-use ray_tracer::AffineTransform as Affine;
-use ray_tracer::Camera;
-use ray_tracer::{Object, Vec3D};
+use ray_tracer::geometry::*;
+use ray_tracer::materials::*;
+use ray_tracer::*;
+use subdivision_surface::SubdivisionSurface;
 
 const ASPECT_RATIO: f32 = 16.0 / 9.0;
 const IMAGE_WIDTH: usize = 400;
@@ -72,7 +67,7 @@ fn scene_tetrahedra() -> (Vec<Object>, Vec<Rc<dyn Light>>, Camera) {
         .zip(&subdivisions[1..])
         .map(|(a, b)| b - a)
         .collect();
-    let sdsurface = sds::SubdivisionSurface::from_triangle_mesh(&tetrahedron);
+    let sdsurface = SubdivisionSurface::from_triangle_mesh(&tetrahedron);
     let mut tetrahedra = vec![(0..subdivisions[0]).fold(sdsurface, |res, _| res.subdivide())];
     for (i, n) in steps.into_iter().enumerate() {
         let mut sdsurface = tetrahedra[i].clone();
@@ -88,7 +83,7 @@ fn scene_tetrahedra() -> (Vec<Object>, Vec<Rc<dyn Light>>, Camera) {
 
     // Add tetrahedron objects to scene
     for (i, sds) in tetrahedra.iter().enumerate() {
-        let transform = Affine::translate(i as f32 * separation);
+        let transform = AffineTransform::translate(i as f32 * separation);
         let mesh = Rc::new(sds.to_triangle_mesh());
         let bvh = TriangleMesh::build_bvh(&mesh);
         scene.push(Object::new(
@@ -104,7 +99,7 @@ fn scene_tetrahedra() -> (Vec<Object>, Vec<Rc<dyn Light>>, Camera) {
 #[allow(dead_code)]
 fn scene_teapot() -> (Vec<Object>, Vec<Rc<dyn Light>>, Camera) {
     let teapot = ray_tracer::stl::read_stl("./meshes/utah_teapot.stl").unwrap();
-    let teapot = Rc::new(sds::loop_subdivide(&teapot, 1));
+    let teapot = Rc::new(loop_subdivide(&teapot, 1));
     // let teapot_material = Rc::new(Dielectric {
     //     refractive_index: 1.5,
     //     roughness: None,
@@ -211,7 +206,10 @@ fn scene_baby_yoda() -> (Vec<Object>, Vec<Rc<dyn Light>>, Camera) {
         Rc::new(Diffuse {
             reflectance: Vec3D::new(0.8, 0.2, 0.2) * 2.0,
         }),
-        Some(Affine::scale_translate(5.0, Vec3D::new(-4.0, 6.0, 59.0))),
+        Some(AffineTransform::scale_translate(
+            5.0,
+            Vec3D::new(-4.0, 6.0, 59.0),
+        )),
     );
 
     // Prepare scene for rendering

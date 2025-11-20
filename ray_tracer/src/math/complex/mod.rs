@@ -1,4 +1,4 @@
-use super::utils::safe_sqrt;
+use crate::math::safe_sqrt;
 use core::ops::*;
 
 #[derive(Debug, Clone, Copy)]

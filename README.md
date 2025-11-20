@@ -16,15 +16,13 @@ cargo run --release > image.ppm
 
 - **Cleanup**
     - **More unit tests**: Add more unit tests for e.g. bsdf.rs, lights.rs, 
-    - **fn hit_bool**: Combine hit and hit_bool into a single function to reduce code duplication
-    - **lib.rs**: Reconsider the organisation of lib.rs, traits.rs, utils.rs, bsdf.rs...
     - **Surface trait**: Move sampling methods from Light trait to Surface trait.
     - **Light trait**: Remove the need of this trait, and move functionality to object/material, and simply let engine know which objects should be considered as lights by supplying a vec of references. This way lights simply become a part of the objects vector.
 
 - **Upgrade Engine**
     - **Stratified sampling**: As a start, use a low-discrepancy sequence for jittering on each pixel.
     - **Pixel Tiles**: Rendering of pixel tiles (e.g., 4x4) instead of lines could improve temporal data locality.
-    - **BVH**: Once BVH struct is upgraded, engine should build BVH of all objects and lights in the scene before rendering.
+    - **BVH**: Engine should build BVH of all objects and lights in the scene before rendering.
     - **Light propagation**: Include history of refraction indices somehow plus include exponential absorbtion of light through dielectric.
     - **Light units**: Figure out proper physical units for light emission.
     - **Eta correction**: Use eta corrected beta value for Russian rulette.
@@ -40,6 +38,5 @@ cargo run --release > image.ppm
 
 - **Accelerators**
     - **GPU**: Self explanatory
-    - **General BVH**: Make BVH take a Vec of some general objects instead of only Triangle.
 
 - **GUI and Real Time Rendering**: Using e.g. [egui](https://docs.rs/egui) or [imgui](https://docs.rs/imgui)

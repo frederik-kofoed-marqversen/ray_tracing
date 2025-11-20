@@ -1,10 +1,14 @@
-extern crate fastrand;
-use super::bsdf::{to_local_coords, to_world_coords};
-use super::{Camera, Light, Object, Ray, Vec3D};
-use fastrand::Rng;
 use std::io;
 use std::io::Write;
 use std::rc::Rc;
+use fastrand::Rng;
+
+use crate::materials::bsdf::{to_local_coords, to_world_coords};
+use crate::Vec3D;
+use crate::Ray;
+use crate::Camera;
+use crate::Object;
+use crate::materials::lights::Light;
 
 #[inline]
 fn write_pixel(lock: &mut io::StdoutLock, pixel_colour: Vec3D) -> io::Result<()> {

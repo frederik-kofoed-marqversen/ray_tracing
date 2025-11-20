@@ -1,7 +1,8 @@
 use std::f32::consts::PI;
 
-use super::traits::{Bounded, Surface};
-use super::{Ray, Vec3D};
+use crate::traits::*;
+use crate::Ray;
+use crate::Vec3D;
 
 #[derive(Debug)]
 pub struct Point {
@@ -9,6 +10,7 @@ pub struct Point {
 }
 
 impl Point {
+    #[inline]
     pub fn new(position: Vec3D) -> Self {
         Self { position }
     }
@@ -27,6 +29,7 @@ pub struct Sphere {
 }
 
 impl Sphere {
+    #[inline]
     pub fn new(center: Vec3D, radius: f32) -> Self {
         Self { center, radius }
     }
@@ -90,6 +93,7 @@ pub struct Triangle {
 }
 
 impl Triangle {
+    #[inline]
     pub fn new(v0: Vec3D, v1: Vec3D, v2: Vec3D) -> Self {
         Self { v0, v1, v2 }
     }
@@ -186,6 +190,7 @@ pub struct Plane {
 }
 
 impl Plane {
+    #[inline]
     pub fn new(p: Vec3D, normal: Vec3D) -> Self {
         let normal = normal.normalise();
         let d = -Vec3D::dot(p, normal);

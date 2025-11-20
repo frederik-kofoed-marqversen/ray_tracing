@@ -1,6 +1,7 @@
-use super::primitives::AxisAlignedBoundingBox as AABB;
-use super::traits::{Bounded, Surface};
-use super::{Ray, Vec3D};
+use crate::geometry::AxisAlignedBoundingBox as AABB;
+use crate::traits::*;
+use crate::Ray;
+use crate::Vec3D;
 
 /// Nodes have a bounding box, a counter for the number of primitives it contains,
 /// and an index. If `num_prim == 0` then the Node is not a leaf node and `index` is

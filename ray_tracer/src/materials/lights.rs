@@ -2,11 +2,12 @@ use std::f32::consts::PI;
 
 use fastrand::Rng;
 
-use super::primitives::Sphere;
-use super::traits::Surface;
-use super::vec3d::utils::{sample_unit_sphere, tangent_space};
-use super::{Ray, Vec3D};
-use super::utils::safe_sqrt;
+use crate::geometry::Sphere;
+use crate::core::traits::*;
+use crate::math::safe_sqrt;
+use crate::math::vec3d::utils::{sample_unit_sphere, tangent_space};
+use crate::Ray;
+use crate::Vec3D;
 
 pub trait Light {
     fn sample(&self, ref_point: Vec3D, rng: &mut Rng) -> LightSample;

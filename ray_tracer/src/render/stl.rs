@@ -2,8 +2,8 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufReader, Error, ErrorKind, Read, Result};
 
-use super::triangle_mesh::TriangleMesh;
-use super::Vec3D;
+use crate::geometry::TriangleMesh;
+use crate::Vec3D;
 
 pub fn read_stl(file_name: &str) -> Result<TriangleMesh> {
     let (reader, num_triangles) = STLReader::new(file_name)?;

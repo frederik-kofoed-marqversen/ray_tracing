@@ -1,8 +1,8 @@
 use core::f32::consts::PI;
 use std::collections::HashMap;
 
-use super::triangle_mesh::TriangleMesh;
-use super::Vec3D;
+use crate::geometry::TriangleMesh;
+use crate::Vec3D;
 
 /// This is an implementation of Loop Subdivision Surface. The algorithm is laid out in
 /// Hoppe et al. 1994. "Piecewise smooth surface reconstruction". In Proceedings of
@@ -162,11 +162,9 @@ impl SubdivisionSurface {
             let new_point;
             if !on_boundary {
                 let n = valence as f32;
-                let a =
-                    5.0 / 8.0 - (3.0 + 2.0 * f32::cos(2.0 * PI / n)).powi(2) / 64.0;
+                let a = 5.0 / 8.0 - (3.0 + 2.0 * f32::cos(2.0 * PI / n)).powi(2) / 64.0;
                 let alpha = n * (1.0 - a) / a;
-                let neighbour_sum: Vec3D =
-                    neighbours.iter().map(|&i| self.vertices[i].point).sum();
+                let neighbour_sum: Vec3D = neighbours.iter().map(|&i| self.vertices[i].point).sum();
                 new_point = (alpha * vertex.point + neighbour_sum) / (alpha + n);
             } else {
                 let neighbour_sum = self.vertices[neighbours[0]].point
@@ -299,12 +297,10 @@ impl SubdivisionSurface {
             let point = self.vertices[vertex].point;
             if !on_boundary {
                 let n = valence as f32;
-                let a =
-                    5.0 / 8.0 - (3.0 + 2.0 * f32::cos(2.0 * PI / n)).powi(2) / 64.0;
+                let a = 5.0 / 8.0 - (3.0 + 2.0 * f32::cos(2.0 * PI / n)).powi(2) / 64.0;
                 let omega = 3.0 * n / (8.0 * a);
 
-                let neighbour_sum: Vec3D =
-                    neighbours.iter().map(|&i| self.vertices[i].point).sum();
+                let neighbour_sum: Vec3D = neighbours.iter().map(|&i| self.vertices[i].point).sum();
                 let new_point = (omega * point + neighbour_sum) / (omega + n);
                 limit_points.push(new_point);
             } else {
