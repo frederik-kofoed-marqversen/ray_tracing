@@ -17,7 +17,7 @@ impl Point {
 }
 
 impl Surface for Point {
-    fn hit(&self, _ray: &Ray, _t_min: f32, _t_max: f32) -> Option<(f32, Vec3D)> {
+    fn hit(&self, _ray: &Ray, _t_min: f32, _t_max: f32) -> Option<SurfaceIntersection> {
         None
     }
 }
@@ -43,10 +43,31 @@ impl Sphere {
     fn normal(&self, point: Vec3D) -> Vec3D {
         return (point - self.center) / self.radius;
     }
+
+    // helper to build an intersection if t is in range
+    #[inline]
+    fn make_intersection(
+        &self,
+        ray: &Ray,
+        t: f32,
+        t_min: f32,
+        t_max: f32,
+    ) -> Option<SurfaceIntersection> {
+        if t > t_min && t < t_max {
+            let normal = self.normal(ray.at(t));
+            let front_face = Vec3D::dot(ray.direction, normal) < 0.0;
+            return Some(SurfaceIntersection {
+                t,
+                normal,
+                front_face,
+            });
+        }
+        None
+    }
 }
 
 impl Surface for Sphere {
-    fn hit(&self, ray: &Ray, t_min: f32, t_max: f32) -> Option<(f32, Vec3D)> {
+    fn hit(&self, ray: &Ray, t_min: f32, t_max: f32) -> Option<SurfaceIntersection> {
         let r_oc: Vec3D = ray.origin - self.center;
         let a = ray.direction.norm_squared();
         let half_b = Vec3D::dot(ray.direction, r_oc);
@@ -58,14 +79,15 @@ impl Surface for Sphere {
         }
         let sqrt_d = d.sqrt();
 
-        let mut t = -(half_b + sqrt_d) / a;
-        if t < t_max && t > t_min {
-            return Some((t, self.normal(ray.at(t))));
+        // try both roots (ordered as in original code)
+        let t1 = (-(half_b + sqrt_d)) / a;
+        if let Some(hit) = self.make_intersection(ray, t1, t_min, t_max) {
+            return Some(hit);
         }
 
-        t = (-half_b + sqrt_d) / a;
-        if t < t_max && t > t_min {
-            return Some((t, self.normal(ray.at(t))));
+        let t2 = (-half_b + sqrt_d) / a;
+        if let Some(hit) = self.make_intersection(ray, t2, t_min, t_max) {
+            return Some(hit);
         }
 
         return None;
@@ -111,6 +133,7 @@ impl Triangle {
     }
 }
 
+/// This intersection test is factored out since it is also used by TriangleMesh struct
 #[inline]
 pub fn triangle_intersection(
     v0: Vec3D,
@@ -119,7 +142,7 @@ pub fn triangle_intersection(
     ray: &Ray,
     t_min: f32,
     t_max: f32,
-) -> Option<(f32, Vec3D)> {
+) -> Option<SurfaceIntersection> {
     // Möller-Trumbore intersection algorithm. More or less copied from Wikipedia
     let e1 = v1 - v0;
     let e2 = v2 - v0;
@@ -150,7 +173,12 @@ pub fn triangle_intersection(
     if t > t_min && t < t_max {
         // Hit!
         let normal = Vec3D::cross(e1, e2).normalise();
-        return Some((t, normal));
+        let front_face = det > 0.0;
+        return Some(SurfaceIntersection {
+            t,
+            normal,
+            front_face,
+        });
     } else {
         // Ray hits outside of given interval
         return None;
@@ -158,7 +186,7 @@ pub fn triangle_intersection(
 }
 
 impl Surface for Triangle {
-    fn hit(&self, ray: &Ray, t_min: f32, t_max: f32) -> Option<(f32, Vec3D)> {
+    fn hit(&self, ray: &Ray, t_min: f32, t_max: f32) -> Option<SurfaceIntersection> {
         triangle_intersection(self.v0, self.v1, self.v2, ray, t_min, t_max)
     }
 }
@@ -199,15 +227,19 @@ impl Plane {
 }
 
 impl Surface for Plane {
-    fn hit(&self, ray: &Ray, t_min: f32, t_max: f32) -> Option<(f32, Vec3D)> {
+    fn hit(&self, ray: &Ray, t_min: f32, t_max: f32) -> Option<SurfaceIntersection> {
         let denom = Vec3D::dot(self.normal, ray.direction);
-        if denom.abs() < f32::EPSILON {
+        if denom.abs() <= f32::EPSILON {
             return None;
         }
 
         let t = -(Vec3D::dot(self.normal, ray.origin) + self.d) / denom;
         if t < t_max && t > t_min {
-            return Some((t, self.normal));
+            return Some(SurfaceIntersection {
+                t,
+                normal: self.normal,
+                front_face: denom > 0.0,
+            });
         } else {
             return None;
         }
@@ -298,18 +330,20 @@ mod tests {
     fn hit_sphere() {
         let sphere = Sphere::new(Vec3D::new(1.0, 1.0, 1.0), 1.0);
         let ray = Ray::new(Vec3D::ZERO, Vec3D::new(1.0, 1.0, 1.0) / f32::sqrt(3.0));
-        let (t, normal) = sphere.hit(&ray, 0.0, f32::INFINITY).unwrap();
-        assert!((f32::sqrt(3.0) - 1.0 - t).abs() < 1e-6);
-        assert!((normal.norm() - 1.0).abs() < 1e-6);
+        let intersection = sphere.hit(&ray, 0.0, f32::INFINITY).unwrap();
+        assert!((f32::sqrt(3.0) - 1.0 - intersection.t).abs() < 1e-6);
+        assert!((intersection.normal.norm() - 1.0).abs() < 1e-6);
+        assert!(intersection.front_face);
     }
 
     #[test]
     fn hit_sphere_tangent() {
         let sphere = Sphere::new(Vec3D::new(1.0, 1.0, 1.0), 1.0);
         let ray = Ray::new(Vec3D::ZERO, Vec3D::new(1.0, 1.0, 0.0) / f32::sqrt(2.0));
-        let (t, normal) = sphere.hit(&ray, 0.0, f32::INFINITY).unwrap();
-        assert!((f32::sqrt(2.0) - t).abs() < 1e-6);
-        assert!((normal.norm() - 1.0).abs() < 1e-6);
+        let intersection = sphere.hit(&ray, 0.0, f32::INFINITY).unwrap();
+        assert!((f32::sqrt(2.0) - intersection.t).abs() < 1e-6);
+        assert!((intersection.normal.norm() - 1.0).abs() < 1e-6);
+        // assert!(intersection.front_face); -- IGNORE --
     }
 
     #[test]
@@ -317,7 +351,7 @@ mod tests {
         let sphere = Sphere::new(Vec3D::new(1.0, 1.0, 1.0), 1.0);
         let ray = Ray::new(Vec3D::ZERO, Vec3D::Z);
         let result = sphere.hit(&ray, 0.0, f32::INFINITY);
-        assert_eq!(result, None);
+        assert!(result.is_none());
     }
 
     #[test]

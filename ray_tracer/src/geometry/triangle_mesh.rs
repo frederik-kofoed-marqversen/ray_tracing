@@ -27,7 +27,7 @@ pub struct TriangleRef {
 }
 
 impl Surface for TriangleRef {
-    fn hit(&self, ray: &Ray, t_min: f32, t_max: f32) -> Option<(f32, Vec3D)> {
+    fn hit(&self, ray: &Ray, t_min: f32, t_max: f32) -> Option<SurfaceIntersection> {
         let tri = self.mesh.triangles[self.index];
         let v0 = self.mesh.vertices[tri[0]];
         let v1 = self.mesh.vertices[tri[1]];

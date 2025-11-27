@@ -1,11 +1,10 @@
+use fastrand::Rng;
 use std::f32::consts::PI;
 
-use fastrand::Rng;
-
 use crate::geometry::Sphere;
-use crate::core::traits::*;
 use crate::math::safe_sqrt;
-use crate::math::vec3d::utils::{sample_unit_sphere, tangent_space};
+use crate::math::utils::{sample_unit_sphere, tangent_space};
+use crate::traits::*;
 use crate::Ray;
 use crate::Vec3D;
 
@@ -84,7 +83,7 @@ impl Light for AreaLight {
     fn hit(&self, ray: &Ray, t_min: f32, t_max: f32) -> Option<(f32, Vec3D, Vec3D)> {
         self.surface
             .hit(ray, t_min, t_max)
-            .map(|(t, normal)| (t, normal, self.emmited_radiance))
+            .map(|intr| (intr.t, intr.normal, self.emmited_radiance))
     }
 
     fn sample(&self, ref_point: Vec3D, rng: &mut Rng) -> LightSample {
@@ -110,9 +109,26 @@ impl Light for AreaLight {
             };
         }
 
-        // Reference point is outside the sphere => Use uniform solid angle sampling
+        // outside the sphere -> uniform solid angle sampling
         let sin_theta_max = sin_theta_max_2.sqrt();
         let cos_theta_max = safe_sqrt(1.0 - sin_theta_max_2);
+        let one_minus_cos_theta_max = 1.0 - cos_theta_max;
+
+        // If solid angle is vanishingly small, approximate the area light as a point light
+        const POINT_LIGHT_EPS: f32 = 1e-9;
+        if one_minus_cos_theta_max <= POINT_LIGHT_EPS {
+            // Convert radiance (L) to point intensity (I). For a diffuse emitter,
+            // outgoing radiant exitance = π * L, so total power ~ L * area * π.
+            // Use that as the point intensity and fall back to point-light sampling.
+            let intensity = self.emmited_radiance * self.surface.area() * PI;
+            let direction = z / d2.sqrt();
+            return LightSample {
+                spectrum: intensity / d2,
+                point: self.surface.center - direction * self.surface.radius,
+                direction,
+                pdf: 1.0,
+            };
+        }
 
         let cos_theta = (cos_theta_max - 1.0) * rng.f32() + 1.0;
         let sin_theta_2 = 1.0 - cos_theta * cos_theta;
@@ -129,7 +145,8 @@ impl Light for AreaLight {
             + self.surface.radius
                 * (cos_alpha * phi.cos() * x + cos_alpha * phi.sin() * y + sin_alpha * z);
         let direction = (point - ref_point).normalise();
-        let pdf = 1.0 / (2.0 * PI * (1.0 - cos_theta_max));
+        let pdf = 1.0 / (2.0 * PI * one_minus_cos_theta_max);
+
         return LightSample {
             spectrum: self.emmited_radiance,
             point,
@@ -139,7 +156,9 @@ impl Light for AreaLight {
     }
 
     fn pdf(&self, ray: &Ray) -> f32 {
-        if let Some((t, normal)) = self.surface.hit(&ray, 0.0, f32::INFINITY) {
+        if let Some(intr) = self.surface.hit(&ray, 0.0, f32::INFINITY) {
+            let t = intr.t;
+            let normal = intr.normal;
             let d2 = (ray.origin - self.surface.center).norm_squared();
             let sin_theta_max_2 = self.surface.radius * self.surface.radius / d2;
 

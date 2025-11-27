@@ -20,15 +20,16 @@ cargo run --release > image.ppm
     - **Light trait**: Remove the need of this trait, and move functionality to object/material, and simply let engine know which objects should be considered as lights by supplying a vec of references. This way lights simply become a part of the objects vector.
 
 - **Upgrade Engine**
-    - **Stratified sampling**: As a start, use a low-discrepancy sequence for jittering on each pixel.
-    - **Pixel Tiles**: Rendering of pixel tiles (e.g., 4x4) instead of lines could improve temporal data locality.
-    - **BVH**: Engine should build BVH of all objects and lights in the scene before rendering.
-    - **Light propagation**: Include history of refraction indices somehow plus include exponential absorbtion of light through dielectric.
-    - **Light units**: Figure out proper physical units for light emission.
     - **Eta correction**: Use eta corrected beta value for Russian rulette.
-    - **Area lights**: Add more types of area lights e.g. Triangle, BVH
-    - **Additional Material Properties**: Such as [Frenel reflectance](https://pbr-book.org/3ed-2018/Reflection_Models/Fresnel_Incidence_Effects) for non-dielectrics and also some [Microfacet models](https://pbr-book.org/3ed-2018/Reflection_Models/Microfacet_Models).
+    - **Area lights**: Add more types of area lights e.g. TriangleMesh, BVH
+    - **Surface roughness**: Add roughness modsel like microfacet model
     - **Depth of field**: Include depth of field to camera struct
+    - **Parametrised media**: Build medium class that takes parametrised properties and then builds some effecient structure of constant majorant segments from that.
+    
+- **Diffraction**
+    - **RGB to spectrum**: Implement RGB to spectrum and spectrum to RGB methods.
+    - **Wavelength sampling**: Sample wavelengths from a camara activation function for each ray instansiation.
+    - **Wavelength collections**: Make engine take a collection of wavelengths and integrate those simultaneously using MIS. Singular wavelength integration can be used as an initial (ineffecient) implementation.
 
 - **Additional Procedural Features**
     - **Mesh Topology Fixes**: Fix the mesh topology fixing algorithm to also allow non-connected surfaces.
@@ -38,5 +39,7 @@ cargo run --release > image.ppm
 
 - **Accelerators**
     - **GPU**: Self explanatory
+    - **Mesh to BVH**: After building BVH, optimise the vertex array of the mesh to match BVH for better data locality
+    - **BVH**: Engine should build BVH of all objects and lights and materials in the scene to use while rendering.
 
 - **GUI and Real Time Rendering**: Using e.g. [egui](https://docs.rs/egui) or [imgui](https://docs.rs/imgui)

@@ -6,6 +6,7 @@ pub mod render;
 
 // export commonly used types at crate root for convenience
 pub use core::*;
+pub use geometry::traits;
 pub use math::AffineTransform;
 pub use math::Vec3D;
 pub use render::*;

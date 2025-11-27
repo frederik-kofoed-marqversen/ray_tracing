@@ -1,14 +1,19 @@
+use fastrand::Rng;
 use std::io;
 use std::io::Write;
 use std::rc::Rc;
-use fastrand::Rng;
 
-use crate::materials::bsdf::{to_local_coords, to_world_coords};
-use crate::Vec3D;
-use crate::Ray;
+use crate::materials::bsdf::{to_shading_coords, to_world_coords};
+use crate::materials::lights::Light;
+use crate::materials::medium::{Medium, MediumInteraction};
+use crate::traits::SurfaceIntersection;
 use crate::Camera;
 use crate::Object;
-use crate::materials::lights::Light;
+use crate::Ray;
+use crate::Vec3D;
+
+const T_MIN: f32 = 1e-3;
+const T_MAX: f32 = f32::INFINITY;
 
 #[inline]
 fn write_pixel(lock: &mut io::StdoutLock, pixel_colour: Vec3D) -> io::Result<()> {
@@ -37,25 +42,55 @@ pub struct Engine {
     objects: Vec<Object>,
     lights: Vec<Rc<dyn Light>>,
     camera: Camera,
+    initial_medium: Option<Rc<dyn Medium>>,
 }
 
 impl Engine {
     #[inline]
     pub fn new(objects: Vec<Object>, lights: Vec<Rc<dyn Light>>, camera: Camera) -> Self {
-        return Self {
+        let mut engine = Self {
             objects,
             lights,
             camera,
+            initial_medium: None,
         };
+
+        dbg!("Implementation incomplete");
+        // Should build BVH with: all objects, all lights, all objects with mediums
+
+        engine.set_initial_medium();
+        return engine;
+    }
+
+    fn set_initial_medium(&mut self) {
+        let mut ray = self.camera.ray(0.5, 0.5);
+        let mut depth = 0;
+        while let Some((intr, obj)) = self.hit(&ray, T_MIN, T_MAX) {
+            let entering = intr.front_face;
+            if obj.mediuminterface.is_some() {
+                if !entering && depth == 0 {
+                    self.initial_medium = obj.mediuminterface.as_ref().unwrap().outside.clone();
+                    break;
+                }
+
+                if entering {
+                    depth += 1;
+                } else {
+                    depth -= 1;
+                }
+            }
+
+            ray.origin = ray.at(intr.t);
+        }
     }
 
     #[inline]
-    fn hit(&self, ray: &Ray, t_min: f32, mut t_max: f32) -> Option<(f32, Vec3D, &Object)> {
-        let mut result: Option<(f32, Vec3D, &Object)> = None;
+    fn hit(&self, ray: &Ray, t_min: f32, mut t_max: f32) -> Option<(SurfaceIntersection, &Object)> {
+        let mut result = None;
         for object in self.objects.iter() {
-            if let Some((t, normal)) = object.hit(ray, t_min, t_max) {
-                t_max = t;
-                result = Some((t, normal, object));
+            if let Some(intr) = object.hit(ray, t_min, t_max) {
+                t_max = intr.t;
+                result = Some((intr, object));
             }
         }
         return result;
@@ -101,12 +136,10 @@ impl Engine {
     }
 
     pub fn ray_colour(&self, mut ray: Ray, mut depth: u32, rng: &mut fastrand::Rng) -> Vec3D {
-        const T_MIN: f32 = 0.001;
-        const T_MAX: f32 = f32::INFINITY;
-
+        let mut current_medium: &Option<Rc<dyn Medium>> = &self.initial_medium;
         let mut radiance = Vec3D::ZERO; // accumulated radiance
         let mut beta = Vec3D::ONES; // path throughput
-        // let mut eta_scaling = 1.0;  // scaling factor for refractive index changes along the path
+                                    // let mut eta_scaling = 1.0;  // scaling factor for refractive index changes along the path
 
         // `prev_pdf` stores the pdf of the sampling method that produced `ray`
         // (when the current ray was generated). For the camera primary ray we
@@ -119,7 +152,7 @@ impl Engine {
 
             // Intersect with scene geometry
             let hit = self.hit(&ray, T_MIN, T_MAX);
-            let t_hit = hit.map_or(T_MAX, |(t, _, _)| t);
+            let t_hit = hit.as_ref().map_or(T_MAX, |(intr, _obj)| intr.t);
 
             // Intersect with lights and add contribution
             if let Some((_, emitted, light)) = self.hit_light(&ray, T_MIN, t_hit) {
@@ -134,14 +167,44 @@ impl Engine {
             }
 
             // No light hit: if no object hit either, ray escapes scene
-            let (t, normal, object) = match hit {
-                Some(h) => h,
+            let (hit, object) = match hit {
+                Some((h, object)) => (h, object),
                 None => break,
             };
 
-            let interaction_point = ray.at(t);
-            let wo_local = to_local_coords(-ray.direction, normal);
-            prev_specular = object.material.is_specular();
+            // Object was hit
+            // Add attenuation of light from propagation through current volumetric medium
+            if let Some(medium) = current_medium {
+                let (medium_interaction, transmittance) =
+                    medium.sample_interaction(&ray, t_hit, rng);
+                match medium_interaction {
+                    MediumInteraction::Null { .. } => {
+                        beta *= transmittance;
+                    }
+                    MediumInteraction::Absorption { emission } => {
+                        radiance += Vec3D::mul_elemwise(beta, emission);
+                        break;
+                    }
+                    MediumInteraction::Scatter {
+                        ray: scattered_ray,
+                        pdf,
+                        f,
+                    } => {
+                        depth -= 1;
+                        beta *= transmittance * f / pdf;
+                        ray = scattered_ray;
+                        continue;
+                    }
+                }
+            }
+
+            // If volumetric medium did not absorb or scatter, proceed to surface interaction
+            let interaction_point = ray.at(hit.t);
+            let wo_local = to_shading_coords(-ray.direction, hit.normal);
+
+            // Sample BSDF to get new direction (indirect lighting)
+            let bsdf_sample = object.material.sample(wo_local, rng);
+            prev_specular = bsdf_sample.is_specular;
 
             // If surface is non-specular, do explicit direct-light sampling
             if !prev_specular {
@@ -154,7 +217,7 @@ impl Engine {
                     direction: light_sample.direction,
                 };
                 if !self.hit_bool(&shadow_ray, T_MIN, T_MAX) {
-                    let wi_local = to_local_coords(shadow_ray.direction, normal);
+                    let wi_local = to_shading_coords(shadow_ray.direction, hit.normal);
 
                     // pdf of sampling this direction via light-sampling strategy
                     let p_light = light_sample.pdf * select_light_pdf;
@@ -174,23 +237,32 @@ impl Engine {
                 }
             }
 
-            // Sample BSDF to get new direction (indirect lighting)
-            let bsdf_sample = object.material.sample(wo_local, rng);
-            let bsdf_val_cos = bsdf_sample.spectrum * bsdf_sample.dir_in.z.abs();
-
             // Update throughput and prepare next ray
+            let bsdf_val_cos = bsdf_sample.spectrum * bsdf_sample.dir_in.z.abs();
             beta = Vec3D::mul_elemwise(beta, bsdf_val_cos) / bsdf_sample.pdf;
             // eta_scaling /= bsdf_sample.eta_rel_it().powi(2); // only upon transmission
             prev_pdf = bsdf_sample.pdf;
-            prev_specular = object.material.is_specular();
+            prev_specular = bsdf_sample.is_specular;
 
             ray = Ray {
                 origin: interaction_point,
-                direction: to_world_coords(bsdf_sample.dir_in, normal),
+                direction: to_world_coords(bsdf_sample.dir_in, hit.normal),
             };
 
+            if bsdf_sample.is_transmission {
+                // Update current medium upon transmission
+                if let Some(mediuminterface) = &object.mediuminterface {
+                    if hit.front_face {
+                        current_medium = &mediuminterface.inside;
+                    } else {
+                        current_medium = &mediuminterface.outside;
+                    }
+                }
+            }
+
             // Russian roulette for path termination
-            let q = 1.0 - beta.max_elem(); // termination probability (removed redundant .max(0.0))
+            // q is termination probability (removed redundant .max(0.0))
+            let q = 1.0 - beta.max_elem();
             // let eta_corrected_beta = beta * eta_scaling;
             // let q = 1.0 - eta_corrected_beta.max_elem();
             if rng.f32() < q {
@@ -232,6 +304,7 @@ impl Engine {
                     let v = (j as f32 + rng.f32()) / (image_height - 1) as f32;
                     let ray = self.camera.ray(u, v);
                     colour += self.ray_colour(ray, ray_depth, &mut rng);
+                    // colour += self.ray_colour(ray, ray_depth, &mut rng);
                 }
                 if colour.x.is_nan() || colour.y.is_nan() || colour.z.is_nan() {
                     colour = Vec3D::new(255.0, 255.0, 0.0);

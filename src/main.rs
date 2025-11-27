@@ -2,21 +2,84 @@ use std::f32::consts::PI;
 use std::rc::Rc;
 
 extern crate ray_tracer;
+use materials::medium::{HomogeneousMedium, MediumInterface};
 use ray_tracer::geometry::*;
+use ray_tracer::materials::testmedium::CheckeredMedium;
 use ray_tracer::materials::*;
 use ray_tracer::*;
 use subdivision_surface::SubdivisionSurface;
 
 const ASPECT_RATIO: f32 = 16.0 / 9.0;
 const IMAGE_WIDTH: usize = 400;
-const SAMPLES_PER_PIXEL: u32 = 64;
-const RAY_DEPTH: u32 = 8;
+const SAMPLES_PER_PIXEL: u32 = 64 * 4;
+const RAY_DEPTH: u32 = 16;
 
 fn main() -> std::io::Result<()> {
-    let (scene, lights, camera) = scene_baby_yoda();
+    let (scene, lights, camera) = scene_volumetric_sphere();
     // Render image
     let eng = ray_tracer::path_integrator::Engine::new(scene, lights, camera);
     return eng.render(ASPECT_RATIO, IMAGE_WIDTH, SAMPLES_PER_PIXEL, RAY_DEPTH);
+}
+
+#[allow(dead_code)]
+fn scene_volumetric_sphere() -> (Vec<Object>, Vec<Rc<dyn Light>>, Camera) {
+    // Sphere surface
+    let sphere_surface = Rc::new(Sphere::new(Vec3D::ZERO, 1.6));
+    let sphere_material: Rc<dyn BSDF> = Rc::new(Dielectric {
+        refractive_index: 1.0,
+        roughness: None,
+    });
+
+    let sphere_medium = MediumInterface::new(
+        Some(Rc::new(CheckeredMedium::new(
+            0.5,
+            0.2,
+            0.1,
+            Vec3D::X * 5.0,
+            0.1,
+            0.5,
+            Vec3D::ZERO,
+            0.0,
+        ))),
+        None,
+    );
+    // let sphere_medium = MediumInterface::new(
+    //     Some(Rc::new(CheckeredMedium::new(1.0, 0.0, 0.0, 0.0, 0.5, 0.0))),
+    //     None,
+    // );
+    // let sphere_medium = MediumInterface::new(
+    //     Some(Rc::new(ExponentialFogMedium {
+    //         sigma_a_base: 0.5,
+    //         sigma_s_base: 0.0,
+    //         falloff: 1.0,
+    //         g: 0.0,
+    //         emission: Vec3D::X,
+    //     })),
+    //     None,
+    // );
+    let sphere = Object::new(sphere_surface, sphere_material, None, Some(sphere_medium));
+
+    // Sun for lighting
+    let light: Rc<dyn Light> = Rc::new(AreaLight {
+        surface: Sphere {
+            center: Vec3D::new(0.0, 100.0, 0.0),
+            radius: 80.0,
+        },
+        emmited_radiance: Vec3D::ONES * 1.0,
+    });
+    let lights = vec![light];
+
+    // Camera
+    let camera = ray_tracer::Camera::new(
+        Vec3D::new(0.1, -5.0, 0.1),
+        Vec3D::new(0.0, 1.0, 0.0),
+        ASPECT_RATIO,
+    );
+
+    // Prepare scene
+    let scene = vec![sphere];
+
+    return (scene, lights, camera);
 }
 
 #[allow(dead_code)]
@@ -43,6 +106,7 @@ fn scene_tetrahedra() -> (Vec<Object>, Vec<Rc<dyn Light>>, Camera) {
         Rc::new(Diffuse {
             reflectance: Vec3D::ONES * 0.8,
         }),
+        None,
         None,
     );
 
@@ -90,6 +154,7 @@ fn scene_tetrahedra() -> (Vec<Object>, Vec<Rc<dyn Light>>, Camera) {
             bvh,
             tetrahedron_material.clone(),
             Some(transform),
+            None,
         ));
     }
 
@@ -120,6 +185,7 @@ fn scene_teapot() -> (Vec<Object>, Vec<Rc<dyn Light>>, Camera) {
             reflectance: Vec3D::ONES * 0.8,
         }),
         None,
+        None,
     );
 
     // Set up camera
@@ -137,7 +203,7 @@ fn scene_teapot() -> (Vec<Object>, Vec<Rc<dyn Light>>, Camera) {
 
     // Prepare scene for rendering
     let bvh = TriangleMesh::build_bvh(&teapot);
-    let teapot = Object::new(bvh, teapot_material, None);
+    let teapot = Object::new(bvh, teapot_material, None, None);
     let scene = vec![teapot, ground];
     let lights = vec![light];
 
@@ -158,6 +224,15 @@ fn scene_baby_yoda() -> (Vec<Object>, Vec<Rc<dyn Light>>, Camera) {
         refractive_index: 1.5,
         roughness: None,
     });
+    let grogu_medium = MediumInterface::new(
+        Some(Rc::new(HomogeneousMedium::new(
+            Vec3D::new(0.03, 0.03, 0.01),
+            Vec3D::ZERO,
+            None,
+            Vec3D::ZERO,
+        ))),
+        None,
+    );
 
     // Ground to cast shadows onto
     let ground = grogu
@@ -169,6 +244,7 @@ fn scene_baby_yoda() -> (Vec<Object>, Vec<Rc<dyn Light>>, Camera) {
         Rc::new(Diffuse {
             reflectance: Vec3D::ONES * 0.8,
         }),
+        None,
         None,
     );
 
@@ -210,11 +286,12 @@ fn scene_baby_yoda() -> (Vec<Object>, Vec<Rc<dyn Light>>, Camera) {
             5.0,
             Vec3D::new(-4.0, 6.0, 59.0),
         )),
+        None,
     );
 
     // Prepare scene for rendering
     let bvh = TriangleMesh::build_bvh(&grogu);
-    let grogu = Object::new(bvh, grogu_material, None);
+    let grogu = Object::new(bvh, grogu_material, None, Some(grogu_medium));
     let scene = vec![grogu, ground, ball];
     let lights = vec![light];
 
@@ -233,6 +310,7 @@ fn scene_primitives() -> (Vec<Object>, Vec<Rc<dyn Light>>, Camera) {
             reflectance: Vec3D::new(1.0, 0.01, 0.01),
         }),
         None,
+        None,
     ));
     scene.push(Object::new(
         Rc::new(Sphere::new(Vec3D::new(-0.5, 0.0, 0.8), 0.75)),
@@ -243,12 +321,14 @@ fn scene_primitives() -> (Vec<Object>, Vec<Rc<dyn Light>>, Camera) {
             roughness: None,
         }),
         None,
+        None,
     ));
     scene.push(Object::new(
         Rc::new(Sphere::new(Vec3D::new(1.5, 0.0, 1.0), 1.0)),
         Rc::new(Diffuse {
             reflectance: Vec3D::new(0.01, 0.01, 1.0),
         }),
+        None,
         None,
     ));
     scene.push(Object::new(
@@ -263,6 +343,7 @@ fn scene_primitives() -> (Vec<Object>, Vec<Rc<dyn Light>>, Camera) {
             roughness: None,
         }),
         None,
+        None,
     ));
     scene.push(Object::new(
         Rc::new(Sphere::new(Vec3D::new(0.0, -1.6, 0.8), 0.75)),
@@ -270,6 +351,7 @@ fn scene_primitives() -> (Vec<Object>, Vec<Rc<dyn Light>>, Camera) {
             refractive_index: 1.5,
             roughness: None,
         }),
+        None,
         None,
     ));
 
@@ -279,6 +361,7 @@ fn scene_primitives() -> (Vec<Object>, Vec<Rc<dyn Light>>, Camera) {
         Rc::new(Diffuse {
             reflectance: Vec3D::ONES * 0.5,
         }),
+        None,
         None,
     ));
 

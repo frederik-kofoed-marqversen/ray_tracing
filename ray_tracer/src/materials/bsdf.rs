@@ -1,5 +1,5 @@
 use crate::math::safe_sqrt;
-use crate::math::vec3d::utils::{sample_unit_sphere, tangent_space};
+use crate::math::utils::{sample_unit_sphere, tangent_space};
 use crate::math::Complex;
 use crate::Vec3D;
 use fastrand::Rng;
@@ -9,13 +9,16 @@ const PI_RECIP: f32 = 1.0 / PI;
 
 pub struct RoughnessModel {} // Placeholder for roughness models
 
+#[derive(Debug, Clone)]
 pub struct BSDFSample {
     pub spectrum: Vec3D,
     pub pdf: f32,
     pub dir_in: Vec3D,
+    pub is_specular: bool,
+    pub is_transmission: bool,
 }
 
-pub fn to_local_coords(dir: Vec3D, normal: Vec3D) -> Vec3D {
+pub fn to_shading_coords(dir: Vec3D, normal: Vec3D) -> Vec3D {
     let (v1, v2) = tangent_space(normal);
     Vec3D::new(
         Vec3D::dot(dir, v1),
@@ -35,9 +38,6 @@ pub trait BSDF {
     fn eval(&self, dir_in: Vec3D, dir_out: Vec3D) -> Vec3D;
     fn pdf(&self, dir_in: Vec3D, dir_out: Vec3D) -> f32;
     fn sample(&self, dir_out: Vec3D, rng: &mut Rng) -> BSDFSample;
-    fn is_specular(&self) -> bool {
-        false
-    }
 }
 
 pub struct Diffuse {
@@ -79,6 +79,8 @@ impl BSDF for Diffuse {
             spectrum,
             pdf,
             dir_in,
+            is_specular: false,
+            is_transmission: false,
         };
     }
 }
@@ -89,10 +91,6 @@ pub struct Dielectric {
 }
 
 impl BSDF for Dielectric {
-    fn is_specular(&self) -> bool {
-        true
-    }
-
     fn eval(&self, _dir_in: Vec3D, _dir_out: Vec3D) -> Vec3D {
         assert!(self.roughness.is_none()); // currently only smooth surfaces
         Vec3D::ZERO
@@ -114,6 +112,8 @@ impl BSDF for Dielectric {
                 spectrum,
                 pdf: reflectance,
                 dir_in,
+                is_specular: true,
+                is_transmission: false,
             };
         } else {
             // Specular transmission
@@ -127,6 +127,8 @@ impl BSDF for Dielectric {
                 spectrum,
                 pdf: transmission,
                 dir_in,
+                is_specular: true,
+                is_transmission: true,
             };
         }
     }
@@ -144,10 +146,6 @@ pub struct Conductor {
 }
 
 impl BSDF for Conductor {
-    fn is_specular(&self) -> bool {
-        true
-    }
-
     fn eval(&self, _dir_in: Vec3D, _dir_out: Vec3D) -> Vec3D {
         assert!(self.roughness.is_none()); // currently only smooth surfaces
         Vec3D::ZERO
@@ -174,6 +172,8 @@ impl BSDF for Conductor {
             spectrum,
             pdf: 1.0,
             dir_in,
+            is_specular: true,
+            is_transmission: false,
         };
     }
 }

@@ -1,7 +1,6 @@
 use crate::geometry::AxisAlignedBoundingBox as AABB;
 use crate::traits::*;
 use crate::Ray;
-use crate::Vec3D;
 
 /// Nodes have a bounding box, a counter for the number of primitives it contains,
 /// and an index. If `num_prim == 0` then the Node is not a leaf node and `index` is
@@ -42,7 +41,7 @@ impl<T: Bounded + Surface> Bounded for BoundingVolumeHierarchy<T> {
 }
 
 impl<T: Bounded + Surface> Surface for BoundingVolumeHierarchy<T> {
-    fn hit(&self, ray: &Ray, t_min: f32, t_max: f32) -> Option<(f32, Vec3D)> {
+    fn hit(&self, ray: &Ray, t_min: f32, t_max: f32) -> Option<SurfaceIntersection> {
         self.traverse_bvh(ray, t_min, t_max, TraverseMode::Nearest)
     }
 
@@ -247,7 +246,7 @@ impl<T: Bounded + Surface> BoundingVolumeHierarchy<T> {
         t_min: f32,
         mut t_max: f32,
         mode: TraverseMode,
-    ) -> Option<(f32, Vec3D)> {
+    ) -> Option<SurfaceIntersection> {
         let mut hit = None;
 
         let mut queue: Vec<&Node> = vec![&self.nodes[0]];
@@ -259,7 +258,7 @@ impl<T: Bounded + Surface> BoundingVolumeHierarchy<T> {
                         match mode {
                             TraverseMode::Any => return Some(new_hit),
                             TraverseMode::Nearest => {
-                                t_max = new_hit.0;
+                                t_max = new_hit.t;
                                 hit = Some(new_hit);
                             }
                         }

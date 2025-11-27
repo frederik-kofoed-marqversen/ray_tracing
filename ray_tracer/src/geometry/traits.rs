@@ -3,11 +3,17 @@ use crate::Ray;
 use crate::Vec3D;
 
 pub trait Surface {
-    fn hit(&self, ray: &Ray, t_min: f32, t_max: f32) -> Option<(f32, Vec3D)>;
+    fn hit(&self, ray: &Ray, t_min: f32, t_max: f32) -> Option<SurfaceIntersection>;
     /// Should be overridden if a more efficient implementation is possible
     fn hit_bool(&self, ray: &Ray, t_min: f32, t_max: f32) -> bool {
         self.hit(ray, t_min, t_max).is_some()
     }
+}
+
+pub struct SurfaceIntersection {
+    pub t: f32,
+    pub normal: Vec3D,
+    pub front_face: bool,
 }
 
 pub trait Bounded {
